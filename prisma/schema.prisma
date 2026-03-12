@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  events       SubmissionEvent[]
+}
+
+model SubmissionEvent {
+  id          String      @id @default(uuid())
+  slug        String      @unique
+  title       String
+  courseCode  String
+  type        EventType   @default(assignment)
+  description String?
+  deadline    DateTime
+  isClosed    Boolean     @default(false)
+  isDeleted   Boolean     @default(false)
+  createdBy   String
+  user        User        @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime    @default(now())
+  submissions Submission[]
+}
+
+enum EventType {
+  assignment
+  attendance
+  lab
+  other
+}
+
+model Submission {
+  id           String          @id @default(uuid())
+  eventId      String
+  event        SubmissionEvent @relation(fields: [eventId], references: [id])
+  fullName     String
+  matricNumber String
+  level        String?
+  qrCode       String
+  submittedAt  DateTime        @default(now())
+  isConfirmed  Boolean         @default(false)
+  confirmedAt  DateTime?
+  confirmedBy  String?
+
+  @@unique([matricNumber, eventId])
+}
