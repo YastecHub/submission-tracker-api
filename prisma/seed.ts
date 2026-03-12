@@ -8,10 +8,10 @@ async function main(): Promise<void> {
   const passwordHash = await bcrypt.hash('admin123', 10);
 
   const user = await prisma.user.upsert({
-    where: { email: 'cr@university.edu' },
+    where: { email: 'ola@gmail.com' },
     update: {},
     create: {
-      email: 'cr@university.edu',
+      email: 'ola@gmail.com',
       passwordHash,
       name: 'Course Representative',
     },
