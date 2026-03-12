@@ -67,13 +67,14 @@ app.listen(PORT, async () => {
   console.log(`  \x1b[1mHealth:  \x1b[0m\x1b[36m\x1b]8;;${base}/api/health\x07${base}/api/health\x1b]8;;\x07\x1b[0m`);
   console.log('  ─────────────────────────────────────────');
 
-  // Check database connection
+  // Check database connection with a real query
   try {
-    await prisma.$connect();
+    await prisma.$queryRaw`SELECT 1`;
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[32m● Connected\x1b[0m');
-  } catch (err) {
+  } catch (err: unknown) {
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[31m● Connection failed\x1b[0m');
-    console.error('  ', err);
+    const msg = err instanceof Error ? err.message.split('\n')[0] : String(err);
+    console.error(`  \x1b[31m${msg}\x1b[0m`);
   }
 
   console.log('  ─────────────────────────────────────────\n');
