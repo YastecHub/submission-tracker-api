@@ -5,6 +5,7 @@ import {
   confirmSubmission,
   scanConfirm,
   exportToExcel,
+  getSubmissionStatus,
 } from '../controllers/submissionController';
 import { authMiddleware } from '../middleware/authMiddleware';
 
@@ -140,6 +141,9 @@ router.post('/scan', authMiddleware, scanConfirm);
  *               error: You have already submitted for this event
  */
 router.post('/', createSubmission);
+
+// Public — student polls this to check if their submission was confirmed
+router.get('/status/:id', getSubmissionStatus);
 
 /**
  * @openapi

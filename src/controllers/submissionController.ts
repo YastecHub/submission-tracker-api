@@ -118,6 +118,19 @@ export async function scanConfirm(req: Request, res: Response): Promise<void> {
   res.json({ alreadyConfirmed: false, submission: updated });
 }
 
+export async function getSubmissionStatus(req: Request, res: Response): Promise<void> {
+  const id = req.params.id as string;
+  const submission = await prisma.submission.findUnique({
+    where: { id },
+    select: { isConfirmed: true, confirmedAt: true, confirmedBy: true },
+  });
+  if (!submission) {
+    res.status(404).json({ error: 'Submission not found' });
+    return;
+  }
+  res.json(submission);
+}
+
 export async function exportToExcel(req: Request, res: Response): Promise<void> {
   const eventId = req.params.eventId as string;
   const event = await prisma.submissionEvent.findFirst({
