@@ -3,6 +3,9 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './src/swagger';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 import authRoutes from './src/routes/auth';
 import eventRoutes from './src/routes/events';
@@ -52,13 +55,26 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
-app.listen(PORT, () => {
-  const base = `http://localhost:${PORT}`;
+app.listen(PORT, async () => {
+  // Use Render's public URL in production, otherwise localhost
+  const base = process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${PORT}`;
+
   console.log('\n');
   console.log('  \x1b[1m\x1b[36mSubmission Tracker API\x1b[0m');
   console.log('  ─────────────────────────────────────────');
   console.log(`  \x1b[1mServer:  \x1b[0m\x1b[36m\x1b]8;;${base}\x07${base}\x1b]8;;\x07\x1b[0m`);
   console.log(`  \x1b[1mDocs:    \x1b[0m\x1b[36m\x1b]8;;${base}/api/docs\x07${base}/api/docs\x1b]8;;\x07\x1b[0m`);
   console.log(`  \x1b[1mHealth:  \x1b[0m\x1b[36m\x1b]8;;${base}/api/health\x07${base}/api/health\x1b]8;;\x07\x1b[0m`);
+  console.log('  ─────────────────────────────────────────');
+
+  // Check database connection
+  try {
+    await prisma.$connect();
+    console.log('  \x1b[1mDB:      \x1b[0m\x1b[32m● Connected\x1b[0m');
+  } catch (err) {
+    console.log('  \x1b[1mDB:      \x1b[0m\x1b[31m● Connection failed\x1b[0m');
+    console.error('  ', err);
+  }
+
   console.log('  ─────────────────────────────────────────\n');
 });
