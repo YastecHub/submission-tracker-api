@@ -20,11 +20,11 @@ function randomSuffix(length = 4): string {
   return result;
 }
 
-export async function uniqueSlug(courseCode: string, title: string): Promise<string> {
+export async function uniqueSlug(courseCode: string, _title: string): Promise<string> {
   let slug: string;
   let exists = true;
   do {
-    slug = `${toSlugPart(courseCode)}-${toSlugPart(title)}-${randomSuffix()}`;
+    slug = `${toSlugPart(courseCode)}-${randomSuffix()}`;
     const found = await prisma.submissionEvent.findUnique({ where: { slug } });
     exists = !!found;
   } while (exists);
