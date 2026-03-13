@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { generateQR } from '../utils/qrGenerator';
 import { exportSubmissions } from '../utils/excelExporter';
+import { sendPush } from '../utils/pushNotifier';
 
 const prisma = new PrismaClient();
 
@@ -49,6 +50,23 @@ export async function createSubmission(req: Request, res: Response): Promise<voi
   });
 
   res.status(201).json({ submission: updated });
+
+  // Fire-and-forget push to event creator
+  try {
+    const creator = await prisma.user.findUnique({
+      where: { id: event.createdBy },
+      select: { pushSubscription: true },
+    });
+    if (creator?.pushSubscription) {
+      await sendPush(creator.pushSubscription, {
+        title: `New submission – ${event.courseCode}`,
+        body: `${fullName} (${matricNumber}) just submitted`,
+        url: `/dashboard`,
+      });
+    }
+  } catch {
+    // push failure should not affect the student response
+  }
 }
 
 export async function getSubmissions(req: Request, res: Response): Promise<void> {

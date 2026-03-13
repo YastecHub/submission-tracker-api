@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, me } from '../controllers/authController';
+import { login, me, savePushSubscription } from '../controllers/authController';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -91,5 +91,6 @@ router.post('/login', login);
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/me', authMiddleware, me);
+router.post('/push-subscription', authMiddleware, savePushSubscription);
 
 export default router;

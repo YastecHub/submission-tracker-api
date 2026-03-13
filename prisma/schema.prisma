@@ -9,12 +9,13 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime @default(now())
-  events       SubmissionEvent[]
+  id               String   @id @default(uuid())
+  email            String   @unique
+  passwordHash     String
+  name             String
+  pushSubscription String?
+  createdAt        DateTime @default(now())
+  events           SubmissionEvent[]
 }
 
 model SubmissionEvent {

@@ -2,21 +2,29 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const SUFFIX_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
-function generateSlug(length = 7): string {
+function toSlugPart(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 25);
+}
+
+function randomSuffix(length = 4): string {
   let result = '';
   for (let i = 0; i < length; i++) {
-    result += CHARS.charAt(Math.floor(Math.random() * CHARS.length));
+    result += SUFFIX_CHARS.charAt(Math.floor(Math.random() * SUFFIX_CHARS.length));
   }
   return result;
 }
 
-export async function uniqueSlug(): Promise<string> {
+export async function uniqueSlug(courseCode: string, title: string): Promise<string> {
   let slug: string;
   let exists = true;
   do {
-    slug = generateSlug();
+    slug = `${toSlugPart(courseCode)}-${toSlugPart(title)}-${randomSuffix()}`;
     const found = await prisma.submissionEvent.findUnique({ where: { slug } });
     exists = !!found;
   } while (exists);

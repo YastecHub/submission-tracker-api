@@ -46,7 +46,7 @@ export async function createEvent(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const slug = await uniqueSlug();
+  const slug = await uniqueSlug(courseCode, title);
 
   const event = await prisma.submissionEvent.create({
     data: {

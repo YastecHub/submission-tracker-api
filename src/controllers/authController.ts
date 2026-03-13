@@ -34,6 +34,19 @@ export async function login(req: Request, res: Response): Promise<void> {
   res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
 }
 
+export async function savePushSubscription(req: Request, res: Response): Promise<void> {
+  const { subscription } = req.body as { subscription?: unknown };
+  if (!subscription) {
+    res.status(400).json({ error: 'subscription required' });
+    return;
+  }
+  await prisma.user.update({
+    where: { id: req.user!.id },
+    data: { pushSubscription: JSON.stringify(subscription) },
+  });
+  res.json({ ok: true });
+}
+
 export async function me(req: Request, res: Response): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
