@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
-import { PrismaClient, EventType, Prisma } from '@prisma/client';
+import { EventType, Prisma } from '@prisma/client';
 import { uniqueSlug } from '../utils/slugGenerator';
+import prisma from '../lib/prisma';
 import { cacheGet, cacheSet, cacheDelete } from '../utils/cache';
 
-const prisma = new PrismaClient();
+
 
 type EventWithCount = Prisma.SubmissionEventGetPayload<{
   include: { _count: { select: { submissions: true } } };

@@ -5,10 +5,11 @@ import compression from 'compression';
 import { rateLimit } from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './src/swagger';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
 
+
+
+import prisma from './src/lib/prisma';
 import authRoutes from './src/routes/auth';
 import eventRoutes from './src/routes/events';
 import submissionRoutes from './src/routes/submissions';

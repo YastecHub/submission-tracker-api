@@ -1,10 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 import { generateQR } from '../utils/qrGenerator';
 import { exportSubmissions } from '../utils/excelExporter';
 import { sendPush } from '../utils/pushNotifier';
-
-const prisma = new PrismaClient();
 
 export async function createSubmission(req: Request, res: Response): Promise<void> {
   const { eventId, fullName, matricNumber, level } = req.body as {
