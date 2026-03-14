@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import compression from 'compression';
+import { rateLimit } from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './src/swagger';
 import { PrismaClient } from '@prisma/client';
@@ -21,7 +23,31 @@ app.use(
   })
 );
 
+// Gzip all responses — cuts payload size by ~70%
+app.use(compression());
+
 app.use(express.json());
+
+// Rate limiting: 200 req/min per IP for general API
+const apiLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+// Stricter limit for submission endpoint — prevents spam
+const submitLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Submission limit reached. Please wait before trying again.' },
+});
+
+app.use('/api', apiLimiter);
+app.use('/api/submissions', submitLimiter);
 
 // Swagger UI — available at /api/docs
 app.use(
