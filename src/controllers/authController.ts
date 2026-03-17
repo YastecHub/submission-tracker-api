@@ -54,6 +54,70 @@ export async function savePushSubscription(req: Request, res: Response): Promise
   res.json({ ok: true });
 }
 
+export async function updateProfile(req: Request, res: Response): Promise<void> {
+  const { name, email } = req.body as { name?: string; email?: string };
+
+  if (!name && !email) {
+    res.status(400).json({ error: 'Nothing to update' });
+    return;
+  }
+
+  if (email) {
+    const taken = await prisma.user.findFirst({
+      where: { email, NOT: { id: req.user!.id } },
+    });
+    if (taken) {
+      res.status(409).json({ error: 'Email already in use by another account' });
+      return;
+    }
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: req.user!.id },
+    data: {
+      ...(name ? { name } : {}),
+      ...(email ? { email } : {}),
+    },
+    select: { id: true, email: true, name: true, role: true },
+  });
+
+  res.json(updated);
+}
+
+export async function changePassword(req: Request, res: Response): Promise<void> {
+  const { currentPassword, newPassword } = req.body as {
+    currentPassword?: string;
+    newPassword?: string;
+  };
+
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: 'New password must be at least 8 characters' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) {
+    res.status(401).json({ error: 'Current password is incorrect' });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+  res.json({ ok: true });
+}
+
 export async function me(req: Request, res: Response): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
