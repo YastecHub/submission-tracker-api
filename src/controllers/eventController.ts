@@ -11,12 +11,19 @@ type EventWithCount = Prisma.SubmissionEventGetPayload<{
 }>;
 
 export async function listEvents(req: Request, res: Response): Promise<void> {
-  const [events, confirmedGroups] = await Promise.all([
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+  const skip = (page - 1) * limit;
+
+  const [events, total, confirmedGroups] = await Promise.all([
     prisma.submissionEvent.findMany({
       where: { createdBy: req.user!.id, isDeleted: false },
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { submissions: true } } },
+      skip,
+      take: limit,
     }),
+    prisma.submissionEvent.count({ where: { createdBy: req.user!.id, isDeleted: false } }),
     prisma.submission.groupBy({
       by: ['eventId'],
       where: { event: { createdBy: req.user!.id }, isConfirmed: true },
@@ -36,7 +43,7 @@ export async function listEvents(req: Request, res: Response): Promise<void> {
     };
   });
 
-  res.json(eventsWithStats);
+  res.json({ events: eventsWithStats, total, page, totalPages: Math.ceil(total / limit) });
 }
 
 export async function createEvent(req: Request, res: Response): Promise<void> {

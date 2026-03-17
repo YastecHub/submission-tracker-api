@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { generateQR } from '../utils/qrGenerator';
 import { exportSubmissions } from '../utils/excelExporter';
@@ -69,21 +70,50 @@ export async function createSubmission(req: Request, res: Response): Promise<voi
 
 export async function getSubmissions(req: Request, res: Response): Promise<void> {
   const eventId = req.params.eventId as string;
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+  const search = ((req.query.search as string) ?? '').trim();
+  const skip = (page - 1) * limit;
+
   const event = await prisma.submissionEvent.findFirst({
     where: { id: eventId, createdBy: req.user!.id, isDeleted: false },
   });
-
   if (!event) {
     res.status(404).json({ error: 'Event not found' });
     return;
   }
 
-  const submissions = await prisma.submission.findMany({
-    where: { eventId },
-    orderBy: { submittedAt: 'desc' },
-  });
+  const searchWhere: Prisma.SubmissionWhereInput = search
+    ? {
+        OR: [
+          { fullName: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { matricNumber: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        ],
+      }
+    : {};
 
-  res.json(submissions);
+  const where: Prisma.SubmissionWhereInput = { eventId, ...searchWhere };
+
+  const [submissions, total, confirmedTotal] = await Promise.all([
+    prisma.submission.findMany({
+      where,
+      orderBy: { submittedAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.submission.count({ where }),
+    prisma.submission.count({ where: { eventId, isConfirmed: true } }),
+  ]);
+
+  res.json({
+    submissions,
+    total,
+    confirmedTotal,
+    pendingTotal: await prisma.submission.count({ where: { eventId, isConfirmed: false } }),
+    page,
+    totalPages: Math.ceil(total / limit),
+    limit,
+  });
 }
 
 export async function confirmSubmission(req: Request, res: Response): Promise<void> {
