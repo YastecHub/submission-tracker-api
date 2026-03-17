@@ -83,7 +83,7 @@ export async function sendWelcomeEmail(
   const roleLabel = role === 'cr' ? 'Class Representative' : 'Assistant Class Rep';
 
   await resend.emails.send({
-    from: 'SubmitIt <noreply@submitit.app>',
+    from: 'SubmitIt <onboarding@resend.dev>',
     to: email,
     subject: `Welcome to SubmitIt, ${name}! Here's your ${roleLabel} guide`,
     html: buildEmail(name, role),
