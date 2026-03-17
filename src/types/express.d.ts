@@ -4,7 +4,7 @@ declare namespace Express {
       id: string;
       email: string;
       name: string;
-      role: 'cr' | 'acr';
+      role: 'cr' | 'acr' | 'dev';
       iat?: number;
       exp?: number;
     };

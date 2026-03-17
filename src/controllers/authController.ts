@@ -33,12 +33,16 @@ export async function login(req: Request, res: Response): Promise<void> {
   // Respond immediately — don't block on email
   res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
 
-  // Fire-and-forget: mark first login and send welcome email
-  if (!user.hasLoggedInBefore) {
+  // Fire-and-forget: mark first login and send welcome email (skip for dev accounts)
+  if (!user.hasLoggedInBefore && user.role !== 'dev') {
     prisma.user
       .update({ where: { id: user.id }, data: { hasLoggedInBefore: true } })
-      .then(() => sendWelcomeEmail(user.name, user.email, user.role))
+      .then(() => sendWelcomeEmail(user.name, user.email, user.role as 'cr' | 'acr'))
       .catch((err) => console.error('[welcome email]', err));
+  } else if (!user.hasLoggedInBefore) {
+    prisma.user
+      .update({ where: { id: user.id }, data: { hasLoggedInBefore: true } })
+      .catch(() => {});
   }
 }
 

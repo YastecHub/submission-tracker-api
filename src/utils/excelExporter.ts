@@ -9,21 +9,21 @@ export function exportSubmissions(
   const wb = XLSX.utils.book_new();
 
   const headers = [
+    'S/N',
     'Full Name',
     'Matric Number',
     'Level',
     'Submitted At',
-    'Confirmed',
     'Confirmed At',
     'Confirmed By',
   ];
 
-  const rows = submissions.map((s) => [
+  const rows = submissions.map((s, i) => [
+    i + 1,
     s.fullName,
     s.matricNumber,
     s.level ?? '',
     format(s.submittedAt),
-    s.isConfirmed ? 'Yes' : 'No',
     s.confirmedAt ? format(s.confirmedAt) : '',
     s.confirmedBy ?? '',
   ]);
@@ -32,11 +32,11 @@ export function exportSubmissions(
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
   ws['!cols'] = [
+    { wch: 6 },  // S/N
     { wch: 30 }, // Full Name
     { wch: 18 }, // Matric Number
     { wch: 12 }, // Level
     { wch: 22 }, // Submitted At
-    { wch: 12 }, // Confirmed
     { wch: 22 }, // Confirmed At
     { wch: 25 }, // Confirmed By
   ];
@@ -61,7 +61,7 @@ export function exportSubmissions(
     }
   }
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Submissions');
+  XLSX.utils.book_append_sheet(wb, ws, 'Confirmed Submissions');
 
   const date = new Date().toISOString().slice(0, 10);
   const filename = `${event.courseCode}_${event.title}_${date}.xlsx`.replace(

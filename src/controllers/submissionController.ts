@@ -76,7 +76,7 @@ export async function getSubmissions(req: Request, res: Response): Promise<void>
   const skip = (page - 1) * limit;
 
   const event = await prisma.submissionEvent.findFirst({
-    where: { id: eventId, createdBy: req.user!.id, isDeleted: false },
+    where: { id: eventId, isDeleted: false },
   });
   if (!event) {
     res.status(404).json({ error: 'Event not found' });
@@ -180,7 +180,7 @@ export async function getSubmissionStatus(req: Request, res: Response): Promise<
 export async function exportToExcel(req: Request, res: Response): Promise<void> {
   const eventId = req.params.eventId as string;
   const event = await prisma.submissionEvent.findFirst({
-    where: { id: eventId, createdBy: req.user!.id, isDeleted: false },
+    where: { id: eventId, isDeleted: false },
   });
 
   if (!event) {
@@ -188,9 +188,10 @@ export async function exportToExcel(req: Request, res: Response): Promise<void> 
     return;
   }
 
+  // Export only confirmed submissions
   const submissions = await prisma.submission.findMany({
-    where: { eventId: eventId },
-    orderBy: { submittedAt: 'asc' },
+    where: { eventId, isConfirmed: true },
+    orderBy: { confirmedAt: 'asc' },
   });
 
   const { buffer, filename } = exportSubmissions(submissions, event);

@@ -38,12 +38,12 @@ async function main(): Promise<void> {
   // Developer / test account — always correct name + role
   const dev = await prisma.user.upsert({
     where: { email: 'yasiroyebo@gmail.com' },
-    update: { name: 'Yasir (Dev)', role: 'cr' },
+    update: { name: 'Yasir (Dev)', role: 'dev' },
     create: {
       email: 'yasiroyebo@gmail.com',
       passwordHash: devHash,
       name: 'Yasir (Dev)',
-      role: 'cr',
+      role: 'dev',
     },
   });
 

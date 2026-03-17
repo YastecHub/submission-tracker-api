@@ -4,8 +4,6 @@ import { uniqueSlug } from '../utils/slugGenerator';
 import prisma from '../lib/prisma';
 import { cacheGet, cacheSet, cacheDelete } from '../utils/cache';
 
-
-
 type EventWithCount = Prisma.SubmissionEventGetPayload<{
   include: { _count: { select: { submissions: true } } };
 }>;
@@ -15,18 +13,19 @@ export async function listEvents(req: Request, res: Response): Promise<void> {
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
   const skip = (page - 1) * limit;
 
+  // All non-deleted events are visible to every logged-in user
   const [events, total, confirmedGroups] = await Promise.all([
     prisma.submissionEvent.findMany({
-      where: { createdBy: req.user!.id, isDeleted: false },
+      where: { isDeleted: false },
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { submissions: true } } },
       skip,
       take: limit,
     }),
-    prisma.submissionEvent.count({ where: { createdBy: req.user!.id, isDeleted: false } }),
+    prisma.submissionEvent.count({ where: { isDeleted: false } }),
     prisma.submission.groupBy({
       by: ['eventId'],
-      where: { event: { createdBy: req.user!.id }, isConfirmed: true },
+      where: { isConfirmed: true },
       _count: { id: true },
     }),
   ]);
@@ -81,7 +80,6 @@ export async function getEventBySlug(req: Request, res: Response): Promise<void>
   const slug = req.params.slug as string;
   const cacheKey = `event:slug:${slug}`;
 
-  // Serve from cache — 300 students hitting same link won't all hit the DB
   const cached = cacheGet<object>(cacheKey);
   if (cached) {
     res.json(cached);
@@ -102,7 +100,6 @@ export async function getEventBySlug(req: Request, res: Response): Promise<void>
     return;
   }
 
-  // Cache for 10 seconds — safe because isClosed is busted on toggleClose
   cacheSet(cacheKey, event, 10_000);
   res.json(event);
 }
@@ -110,8 +107,9 @@ export async function getEventBySlug(req: Request, res: Response): Promise<void>
 export async function getEventById(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
 
+  // Any authenticated user can view any event's detail
   const event = await prisma.submissionEvent.findFirst({
-    where: { id, createdBy: req.user!.id, isDeleted: false },
+    where: { id, isDeleted: false },
     include: { _count: { select: { submissions: true } } },
   });
 
@@ -135,12 +133,13 @@ export async function getEventById(req: Request, res: Response): Promise<void> {
 export async function toggleClose(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
 
+  // Only the creator can close/reopen their own event
   const event = await prisma.submissionEvent.findFirst({
     where: { id, createdBy: req.user!.id, isDeleted: false },
   });
 
   if (!event) {
-    res.status(404).json({ error: 'Event not found' });
+    res.status(404).json({ error: 'Event not found or not authorised' });
     return;
   }
 
@@ -149,7 +148,6 @@ export async function toggleClose(req: Request, res: Response): Promise<void> {
     data: { isClosed: !event.isClosed },
   });
 
-  // Bust cache so students immediately see the closed state
   cacheDelete(`event:slug:${event.slug}`);
   res.json(updated);
 }
@@ -157,12 +155,13 @@ export async function toggleClose(req: Request, res: Response): Promise<void> {
 export async function deleteEvent(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
 
+  // Only the creator can delete their own event
   const event = await prisma.submissionEvent.findFirst({
     where: { id, createdBy: req.user!.id, isDeleted: false },
   });
 
   if (!event) {
-    res.status(404).json({ error: 'Event not found' });
+    res.status(404).json({ error: 'Event not found or not authorised' });
     return;
   }
 
