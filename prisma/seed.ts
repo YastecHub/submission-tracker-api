@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   // Class Representative
   const cr = await prisma.user.upsert({
     where: { email: 'abdulbasitopeyemi299@gmail.com' },
-    update: {},
+    update: { name: 'Abdulbasit Opeyemi', role: 'cr' },
     create: {
       email: 'abdulbasitopeyemi299@gmail.com',
       passwordHash: crHash,
@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   // Assistant CR — Oreoluwa
   const acr = await prisma.user.upsert({
     where: { email: 'Chryxcreates@gmail.com' },
-    update: {},
+    update: { name: 'Oreoluwa', role: 'acr' },
     create: {
       email: 'Chryxcreates@gmail.com',
       passwordHash: acrHash,
@@ -35,10 +35,10 @@ async function main(): Promise<void> {
     },
   });
 
-  // Developer / test account
+  // Developer / test account — always correct name + role
   const dev = await prisma.user.upsert({
     where: { email: 'yasiroyebo@gmail.com' },
-    update: {},
+    update: { name: 'Yasir (Dev)', role: 'cr' },
     create: {
       email: 'yasiroyebo@gmail.com',
       passwordHash: devHash,
@@ -47,9 +47,9 @@ async function main(): Promise<void> {
     },
   });
 
-  console.log('Seeded CR   :', cr.email);
-  console.log('Seeded ACR  :', acr.email);
-  console.log('Seeded Dev  :', dev.email);
+  console.log('Seeded CR   :', cr.email, '→', cr.name);
+  console.log('Seeded ACR  :', acr.email, '→', acr.name);
+  console.log('Seeded Dev  :', dev.email, '→', dev.name);
 }
 
 main()

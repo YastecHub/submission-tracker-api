@@ -30,15 +30,16 @@ export async function login(req: Request, res: Response): Promise<void> {
     { expiresIn: '7d' }
   );
 
-  // Send welcome email + mark first login — fire and forget
+  // Respond immediately — don't block on email
+  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+
+  // Fire-and-forget: mark first login and send welcome email
   if (!user.hasLoggedInBefore) {
     prisma.user
       .update({ where: { id: user.id }, data: { hasLoggedInBefore: true } })
       .then(() => sendWelcomeEmail(user.name, user.email, user.role))
       .catch((err) => console.error('[welcome email]', err));
   }
-
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
 }
 
 export async function savePushSubscription(req: Request, res: Response): Promise<void> {
