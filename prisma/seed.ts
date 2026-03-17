@@ -5,19 +5,51 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
-  const passwordHash = await bcrypt.hash('admin123', 10);
+  const [crHash, acrHash, devHash] = await Promise.all([
+    bcrypt.hash('Abdulbashit@12', 10),
+    bcrypt.hash('TrendUni01!', 10),
+    bcrypt.hash('Yastec01!', 10),
+  ]);
 
-  const user = await prisma.user.upsert({
-    where: { email: 'ola@gmail.com' },
+  // Class Representative
+  const cr = await prisma.user.upsert({
+    where: { email: 'abdulbasitopeyemi299@gmail.com' },
     update: {},
     create: {
-      email: 'ola@gmail.com',
-      passwordHash,
-      name: 'Course Representative',
+      email: 'abdulbasitopeyemi299@gmail.com',
+      passwordHash: crHash,
+      name: 'Abdulbasit Opeyemi',
+      role: 'cr',
     },
   });
 
-  console.log('Seeded CR account:', user.email);
+  // Assistant CR — Oreoluwa
+  const acr = await prisma.user.upsert({
+    where: { email: 'Chryxcreates@gmail.com' },
+    update: {},
+    create: {
+      email: 'Chryxcreates@gmail.com',
+      passwordHash: acrHash,
+      name: 'Oreoluwa',
+      role: 'acr',
+    },
+  });
+
+  // Developer / test account
+  const dev = await prisma.user.upsert({
+    where: { email: 'yasiroyebo@gmail.com' },
+    update: {},
+    create: {
+      email: 'yasiroyebo@gmail.com',
+      passwordHash: devHash,
+      name: 'Yasir (Dev)',
+      role: 'cr',
+    },
+  });
+
+  console.log('Seeded CR   :', cr.email);
+  console.log('Seeded ACR  :', acr.email);
+  console.log('Seeded Dev  :', dev.email);
 }
 
 main()

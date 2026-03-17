@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
+import { sendWelcomeEmail } from '../utils/mailer';
 
 export async function login(req: Request, res: Response): Promise<void> {
   const { email, password } = req.body as { email?: string; password?: string };
@@ -24,12 +25,20 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   const token = jwt.sign(
-    { id: user.id, email: user.email, name: user.name },
+    { id: user.id, email: user.email, name: user.name, role: user.role },
     process.env.JWT_SECRET!,
     { expiresIn: '7d' }
   );
 
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  // Send welcome email + mark first login — fire and forget
+  if (!user.hasLoggedInBefore) {
+    prisma.user
+      .update({ where: { id: user.id }, data: { hasLoggedInBefore: true } })
+      .then(() => sendWelcomeEmail(user.name, user.email, user.role))
+      .catch((err) => console.error('[welcome email]', err));
+  }
+
+  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
 }
 
 export async function savePushSubscription(req: Request, res: Response): Promise<void> {
@@ -48,7 +57,7 @@ export async function savePushSubscription(req: Request, res: Response): Promise
 export async function me(req: Request, res: Response): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, email: true, name: true, createdAt: true },
+    select: { id: true, email: true, name: true, role: true, createdAt: true },
   });
 
   if (!user) {
