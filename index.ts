@@ -38,17 +38,7 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later.' },
 });
 
-// Stricter limit for submission endpoint — prevents spam
-const submitLimiter = rateLimit({
-  windowMs: 60_000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Submission limit reached. Please wait before trying again.' },
-});
-
 app.use('/api', apiLimiter);
-app.use('/api/submissions', submitLimiter);
 
 // Swagger UI — available at /api/docs
 app.use(

@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 async function main(): Promise<void> {
   const [crHash, acrHash, devHash] = await Promise.all([
     bcrypt.hash('Abdulbashit@12', 10),
-    bcrypt.hash('TrendUni01!', 10),
+    bcrypt.hash('Chryx@18', 10),
     bcrypt.hash('Yastec01!', 10),
   ]);
 
@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   // Assistant CR — Oreoluwa
   const acr = await prisma.user.upsert({
     where: { email: 'Chryxcreates@gmail.com' },
-    update: { name: 'Oreoluwa', role: 'acr' },
+    update: { name: 'Oreoluwa', role: 'acr', passwordHash: acrHash },
     create: {
       email: 'Chryxcreates@gmail.com',
       passwordHash: acrHash,
