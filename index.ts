@@ -13,6 +13,8 @@ import prisma from './src/lib/prisma';
 import authRoutes from './src/routes/auth';
 import eventRoutes from './src/routes/events';
 import submissionRoutes from './src/routes/submissions';
+import paymentEventRoutes from './src/routes/paymentEvents';
+import paymentReceiptRoutes from './src/routes/paymentReceipts';
 
 const app = express();
 
@@ -59,6 +61,8 @@ app.get('/api/docs.json', (_req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/submissions', submissionRoutes);
+app.use('/api/payment-events', paymentEventRoutes);
+app.use('/api/payment-receipts', paymentReceiptRoutes);
 
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });

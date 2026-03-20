@@ -28,3 +28,14 @@ export async function uniqueSlug(courseCode: string, _title: string): Promise<st
   } while (exists);
   return slug;
 }
+
+export async function uniquePaymentSlug(title: string): Promise<string> {
+  let slug: string;
+  let exists = true;
+  do {
+    slug = `pay-${toSlugPart(title)}-${randomSuffix()}`;
+    const found = await prisma.paymentEvent.findUnique({ where: { slug } });
+    exists = !!found;
+  } while (exists);
+  return slug;
+}

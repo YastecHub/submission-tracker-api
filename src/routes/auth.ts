@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, me, savePushSubscription, updateProfile, changePassword } from '../controllers/authController';
+import { login, me, savePushSubscription, updateProfile, changePassword, createUser } from '../controllers/authController';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -94,5 +94,6 @@ router.get('/me', authMiddleware, me);
 router.patch('/profile', authMiddleware, updateProfile);
 router.patch('/password', authMiddleware, changePassword);
 router.post('/push-subscription', authMiddleware, savePushSubscription);
+router.post('/users', authMiddleware, createUser);
 
 export default router;

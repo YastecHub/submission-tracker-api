@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { UserRole } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { sendWelcomeEmail } from '../utils/mailer';
 
@@ -121,6 +122,52 @@ export async function changePassword(req: Request, res: Response): Promise<void>
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
 
   res.json({ ok: true });
+}
+
+export async function createUser(req: Request, res: Response): Promise<void> {
+  // Only CR and dev can create accounts
+  const callerRole = req.user!.role;
+  if (callerRole !== 'cr' && callerRole !== 'dev') {
+    res.status(403).json({ error: 'Only CR or dev can create user accounts' });
+    return;
+  }
+
+  const { name, email, password, role } = req.body as {
+    name?: string;
+    email?: string;
+    password?: string;
+    role?: string;
+  };
+
+  if (!name || !email || !password || !role) {
+    res.status(400).json({ error: 'name, email, password, and role are required' });
+    return;
+  }
+
+  const validRoles = ['cr', 'acr', 'fin_sec', 'dev'];
+  if (!validRoles.includes(role)) {
+    res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
+    return;
+  }
+
+  if (password.length < 8) {
+    res.status(400).json({ error: 'Password must be at least 8 characters' });
+    return;
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    res.status(409).json({ error: 'An account with this email already exists' });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const user = await prisma.user.create({
+    data: { name, email, passwordHash, role: role as UserRole },
+    select: { id: true, email: true, name: true, role: true, createdAt: true },
+  });
+
+  res.status(201).json(user);
 }
 
 export async function me(req: Request, res: Response): Promise<void> {

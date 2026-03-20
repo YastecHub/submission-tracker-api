@@ -11,6 +11,7 @@ datasource db {
 enum UserRole {
   cr
   acr
+  fin_sec
   dev
 }
 
@@ -24,6 +25,7 @@ model User {
   pushSubscription  String?
   createdAt         DateTime  @default(now())
   events            SubmissionEvent[]
+  paymentEvents     PaymentEvent[]
 }
 
 model SubmissionEvent {
@@ -61,6 +63,48 @@ model Submission {
   isConfirmed  Boolean         @default(false)
   confirmedAt  DateTime?
   confirmedBy  String?
+
+  @@unique([matricNumber, eventId])
+}
+
+enum PaymentStatus {
+  pending
+  confirmed
+  rejected
+}
+
+model PaymentEvent {
+  id            String          @id @default(uuid())
+  slug          String          @unique
+  title         String
+  description   String?
+  amount        Decimal         @db.Decimal(10, 2)
+  accountNumber String
+  accountName   String
+  bankName      String
+  deadline      DateTime
+  isClosed      Boolean         @default(false)
+  isDeleted     Boolean         @default(false)
+  createdBy     String
+  creator       User            @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime        @default(now())
+  receipts      PaymentReceipt[]
+}
+
+model PaymentReceipt {
+  id              String        @id @default(uuid())
+  eventId         String
+  event           PaymentEvent  @relation(fields: [eventId], references: [id])
+  fullName        String
+  matricNumber    String
+  level           String?
+  receiptUrl      String
+  receiptPublicId String
+  submittedAt     DateTime      @default(now())
+  status          PaymentStatus @default(pending)
+  confirmedAt     DateTime?
+  confirmedBy     String?
+  note            String?
 
   @@unique([matricNumber, eventId])
 }
