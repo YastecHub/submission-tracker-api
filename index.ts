@@ -96,8 +96,16 @@ app.listen(PORT, async () => {
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[32m● Connected\x1b[0m');
   } catch (err: unknown) {
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[31m● Connection failed\x1b[0m');
-    const msg = err instanceof Error ? err.message.split('\n')[0] : String(err);
-    console.error(`  \x1b[31m${msg}\x1b[0m`);
+    console.error('  ─────────────────────────────────────────');
+    console.error('  \x1b[31mDiagnostics:\x1b[0m');
+    console.error(`  DATABASE_URL: ${process.env.DATABASE_URL ? '✓ Set' : '✗ Not set'}`);
+    if (err instanceof Error) {
+      const lines = err.message.split('\n');
+      lines.forEach(line => console.error(`  \x1b[31m${line.trim()}\x1b[0m`));
+    } else {
+      console.error(`  \x1b[31m${String(err)}\x1b[0m`);
+    }
+    console.error('  ─────────────────────────────────────────');
   }
 
   console.log('  ─────────────────────────────────────────\n');
