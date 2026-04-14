@@ -15,6 +15,7 @@ import eventRoutes from './src/routes/events';
 import submissionRoutes from './src/routes/submissions';
 import paymentEventRoutes from './src/routes/paymentEvents';
 import paymentReceiptRoutes from './src/routes/paymentReceipts';
+import transactionRoutes from './src/routes/transactions';
 
 const app = express();
 
@@ -47,7 +48,7 @@ app.use(
   '/api/docs',
   swaggerUi.serve,
   swaggerUi.setup(swaggerSpec, {
-    customSiteTitle: 'Submission Tracker API',
+    customSiteTitle: 'NEXIUM API',
     customCss: '.swagger-ui .topbar { display: none }',
   })
 );
@@ -63,6 +64,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/payment-events', paymentEventRoutes);
 app.use('/api/payment-receipts', paymentReceiptRoutes);
+app.use('/api', transactionRoutes);
 
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
@@ -81,7 +83,7 @@ app.listen(PORT, async () => {
   const base = process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${PORT}`;
 
   console.log('\n');
-  console.log('  \x1b[1m\x1b[36mSubmission Tracker API\x1b[0m');
+  console.log('  \x1b[1m\x1b[35mNEXIUM API\x1b[0m');
   console.log('  ─────────────────────────────────────────');
   console.log(`  \x1b[1mServer:  \x1b[0m\x1b[36m\x1b]8;;${base}\x07${base}\x1b]8;;\x07\x1b[0m`);
   console.log(`  \x1b[1mDocs:    \x1b[0m\x1b[36m\x1b]8;;${base}/api/docs\x07${base}/api/docs\x1b]8;;\x07\x1b[0m`);

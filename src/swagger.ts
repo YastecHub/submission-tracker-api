@@ -4,10 +4,10 @@ const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Submission Tracker API',
+      title: 'NEXIUM API',
       version: '1.0.0',
       description:
-        'API for managing digital submission confirmations in a university setting. ' +
+        'NEXIUM — class submissions, payments and account transparency. ' +
         'CRs create events and confirm submissions; students submit without an account.',
     },
     servers: [

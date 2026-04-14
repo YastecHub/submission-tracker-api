@@ -26,6 +26,7 @@ model User {
   createdAt         DateTime  @default(now())
   events            SubmissionEvent[]
   paymentEvents     PaymentEvent[]
+  transactions      Transaction[]
 }
 
 model SubmissionEvent {
@@ -105,6 +106,33 @@ model PaymentReceipt {
   confirmedAt     DateTime?
   confirmedBy     String?
   note            String?
+  transaction     Transaction?
 
   @@unique([matricNumber, eventId])
+}
+
+enum TransactionType {
+  credit
+  debit
+}
+
+model Transaction {
+  id            String          @id @default(uuid())
+  type          TransactionType
+  amount        Decimal         @db.Decimal(12, 2)
+  description   String
+  category      String?
+  occurredAt    DateTime
+  proofUrl      String?
+  proofPublicId String?
+  recordedBy    String
+  recorder      User            @relation(fields: [recordedBy], references: [id])
+  receiptId     String?         @unique
+  receipt       PaymentReceipt? @relation(fields: [receiptId], references: [id])
+  isDeleted     Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([occurredAt])
+  @@index([isDeleted])
 }

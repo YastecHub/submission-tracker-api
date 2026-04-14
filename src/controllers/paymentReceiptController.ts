@@ -1,24 +1,7 @@
 import { Request, Response } from 'express';
-import { Readable } from 'stream';
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
-import cloudinary from '../lib/cloudinary';
-
-async function uploadToCloudinary(
-  buffer: Buffer,
-  folder: string
-): Promise<{ url: string; publicId: string }> {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: 'image' },
-      (error, result) => {
-        if (error || !result) return reject(error ?? new Error('Cloudinary upload failed'));
-        resolve({ url: result.secure_url, publicId: result.public_id });
-      }
-    );
-    Readable.from(buffer).pipe(stream);
-  });
-}
+import { uploadImageBuffer } from '../lib/cloudinary';
 
 export async function submitPaymentReceipt(req: Request, res: Response): Promise<void> {
   const { eventId, fullName, matricNumber, level } = req.body as {
@@ -60,7 +43,7 @@ export async function submitPaymentReceipt(req: Request, res: Response): Promise
   let receiptUrl: string;
   let receiptPublicId: string;
   try {
-    const result = await uploadToCloudinary(req.file.buffer, 'payment-receipts');
+    const result = await uploadImageBuffer(req.file.buffer, 'payment-receipts');
     receiptUrl = result.url;
     receiptPublicId = result.publicId;
   } catch {
@@ -141,20 +124,51 @@ export async function confirmPaymentReceipt(req: Request, res: Response): Promis
   const id = req.params.id as string;
   const { note } = req.body as { note?: string };
 
-  const receipt = await prisma.paymentReceipt.findUnique({ where: { id } });
+  const receipt = await prisma.paymentReceipt.findUnique({
+    where: { id },
+    include: { event: true, transaction: true },
+  });
   if (!receipt) {
     res.status(404).json({ error: 'Receipt not found' });
     return;
   }
 
-  const updated = await prisma.paymentReceipt.update({
-    where: { id },
-    data: {
-      status: 'confirmed',
-      confirmedAt: new Date(),
-      confirmedBy: req.user!.name,
-      note: note ?? null,
-    },
+  const wasConfirmed = receipt.status === 'confirmed';
+  const now = new Date();
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedReceipt = await tx.paymentReceipt.update({
+      where: { id },
+      data: {
+        status: 'confirmed',
+        confirmedAt: now,
+        confirmedBy: req.user!.name,
+        note: note ?? null,
+      },
+    });
+
+    if (!wasConfirmed) {
+      if (receipt.transaction && receipt.transaction.isDeleted) {
+        await tx.transaction.update({
+          where: { id: receipt.transaction.id },
+          data: { isDeleted: false, occurredAt: now, recordedBy: req.user!.id },
+        });
+      } else if (!receipt.transaction) {
+        await tx.transaction.create({
+          data: {
+            type: 'credit',
+            amount: receipt.event.amount,
+            description: `Payment: ${receipt.event.title} — ${receipt.matricNumber}`,
+            category: 'Dues',
+            occurredAt: now,
+            recordedBy: req.user!.id,
+            receiptId: receipt.id,
+          },
+        });
+      }
+    }
+
+    return updatedReceipt;
   });
 
   res.json(updated);
@@ -164,20 +178,37 @@ export async function rejectPaymentReceipt(req: Request, res: Response): Promise
   const id = req.params.id as string;
   const { note } = req.body as { note?: string };
 
-  const receipt = await prisma.paymentReceipt.findUnique({ where: { id } });
+  const receipt = await prisma.paymentReceipt.findUnique({
+    where: { id },
+    include: { transaction: true },
+  });
   if (!receipt) {
     res.status(404).json({ error: 'Receipt not found' });
     return;
   }
 
-  const updated = await prisma.paymentReceipt.update({
-    where: { id },
-    data: {
-      status: 'rejected',
-      confirmedAt: new Date(),
-      confirmedBy: req.user!.name,
-      note: note ?? null,
-    },
+  const wasConfirmed = receipt.status === 'confirmed';
+  const now = new Date();
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedReceipt = await tx.paymentReceipt.update({
+      where: { id },
+      data: {
+        status: 'rejected',
+        confirmedAt: now,
+        confirmedBy: req.user!.name,
+        note: note ?? null,
+      },
+    });
+
+    if (wasConfirmed && receipt.transaction && !receipt.transaction.isDeleted) {
+      await tx.transaction.update({
+        where: { id: receipt.transaction.id },
+        data: { isDeleted: true },
+      });
+    }
+
+    return updatedReceipt;
   });
 
   res.json(updated);

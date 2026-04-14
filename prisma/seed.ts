@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   // Class Representative
   const cr = await prisma.user.upsert({
     where: { email: 'abdulbasitopeyemi299@gmail.com' },
-    update: { name: 'Abdulbasit Opeyemi', role: 'cr' },
+    update: { name: 'Abdulbasit Opeyemi', role: 'cr', passwordHash: crHash },
     create: {
       email: 'abdulbasitopeyemi299@gmail.com',
       passwordHash: crHash,
@@ -35,10 +35,10 @@ async function main(): Promise<void> {
     },
   });
 
-  // Developer / test account — always correct name + role
+  // Developer / test account — always correct name + role + password
   const dev = await prisma.user.upsert({
     where: { email: 'yasiroyebo@gmail.com' },
-    update: { name: 'Yasir (Dev)', role: 'dev' },
+    update: { name: 'Yasir (Dev)', role: 'dev', passwordHash: devHash },
     create: {
       email: 'yasiroyebo@gmail.com',
       passwordHash: devHash,

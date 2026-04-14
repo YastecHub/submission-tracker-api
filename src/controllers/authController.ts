@@ -13,7 +13,10 @@ export async function login(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+  });
   if (!user) {
     res.status(401).json({ error: 'Invalid credentials' });
     return;
