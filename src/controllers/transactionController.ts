@@ -26,8 +26,8 @@ function parseOccurredAt(raw: unknown): Date | null {
 }
 
 function serializeTransaction(
-  t: Prisma.TransactionGetPayload<{ include: { recorder: { select: { name: true } } } }>,
-  { includeRecordedBy = false }: { includeRecordedBy?: boolean } = {}
+  t: Prisma.TransactionGetPayload<{ include: { recorder: { select: { name: true; role: true } } } }>,
+  { includeRecordedBy = false, includeRecorderName = true }: { includeRecordedBy?: boolean; includeRecorderName?: boolean } = {}
 ) {
   return {
     id: t.id,
@@ -37,7 +37,7 @@ function serializeTransaction(
     category: t.category,
     occurredAt: t.occurredAt,
     proofUrl: t.proofUrl,
-    recorderName: t.recorder?.name ?? null,
+    ...(includeRecorderName ? { recorderName: t.recorder?.name ?? null, recorderRole: t.recorder?.role ?? null } : {}),
     receiptId: t.receiptId,
     isDeleted: t.isDeleted,
     createdAt: t.createdAt,
@@ -82,14 +82,14 @@ export async function getLedger(req: Request, res: Response): Promise<void> {
       orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
-      include: { recorder: { select: { name: true } } },
+      include: { recorder: { select: { name: true, role: true } } },
     }),
     computeLedgerTotals({ isDeleted: false }),
   ]);
 
   res.json({
     ...totals,
-    transactions: transactions.map((t) => serializeTransaction(t)),
+    transactions: transactions.map((t) => serializeTransaction(t, { includeRecorderName: true })),
     page,
     limit,
     totalPages: Math.ceil(totals.transactionCount / limit),
@@ -154,14 +154,14 @@ export async function listTransactionsAdmin(req: Request, res: Response): Promis
       orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
-      include: { recorder: { select: { name: true } } },
+      include: { recorder: { select: { name: true, role: true } } },
     }),
     computeLedgerTotals({ isDeleted: false }),
   ]);
 
   res.json({
     ...totals,
-    transactions: transactions.map((t) => serializeTransaction(t, { includeRecordedBy: true })),
+    transactions: transactions.map((t) => serializeTransaction(t, { includeRecordedBy: true, includeRecorderName: true })),
     page,
     limit,
     totalPages: Math.ceil(totals.transactionCount / limit),
@@ -225,10 +225,10 @@ export async function createTransaction(req: Request, res: Response): Promise<vo
       proofPublicId,
       recordedBy: req.user!.id,
     },
-    include: { recorder: { select: { name: true } } },
+    include: { recorder: { select: { name: true, role: true } } },
   });
 
-  res.status(201).json(serializeTransaction(created, { includeRecordedBy: true }));
+  res.status(201).json(serializeTransaction(created, { includeRecordedBy: true, includeRecorderName: true }));
 }
 
 export async function updateTransaction(req: Request, res: Response): Promise<void> {
@@ -311,10 +311,10 @@ export async function updateTransaction(req: Request, res: Response): Promise<vo
   const updated = await prisma.transaction.update({
     where: { id },
     data: updates,
-    include: { recorder: { select: { name: true } } },
+    include: { recorder: { select: { name: true, role: true } } },
   });
 
-  res.json(serializeTransaction(updated, { includeRecordedBy: true }));
+  res.json(serializeTransaction(updated, { includeRecordedBy: true, includeRecorderName: true }));
 }
 
 export async function deleteTransaction(req: Request, res: Response): Promise<void> {
