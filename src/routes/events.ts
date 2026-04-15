@@ -50,7 +50,7 @@ router.get('/', authMiddleware, listEvents);
  *   post:
  *     tags: [Events]
  *     summary: Create a new submission event
- *     description: Generates a unique 7-character slug. Share `/submit/{slug}` with students.
+ *     description: Generates a unique 7-character slug. Share `/submitit/{slug}` with students.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
