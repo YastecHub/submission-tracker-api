@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { uploadImageBuffer } from '../lib/cloudinary';
+import { generateQR } from '../utils/qrGenerator';
 
 export async function submitPaymentReceipt(req: Request, res: Response): Promise<void> {
   const { eventId, fullName, matricNumber, level } = req.body as {
@@ -62,6 +63,16 @@ export async function submitPaymentReceipt(req: Request, res: Response): Promise
     },
   });
 
+  if (event.hasTickets && !receipt.ticketQrCode) {
+    const ticketQrCode = await generateQR(receipt.id);
+    const updated = await prisma.paymentReceipt.update({
+      where: { id: receipt.id },
+      data: { ticketQrCode },
+    });
+    res.status(201).json({ receipt: updated });
+    return;
+  }
+
   res.status(201).json({ receipt });
 }
 
@@ -95,7 +106,7 @@ export async function getPaymentReceipts(req: Request, res: Response): Promise<v
 
   const where: Prisma.PaymentReceiptWhereInput = { eventId, ...searchWhere, ...statusWhere };
 
-  const [receipts, total, confirmedTotal, rejectedTotal, pendingTotal] = await Promise.all([
+  const [receipts, total, confirmedTotal, rejectedTotal, pendingTotal, claimedTotal] = await Promise.all([
     prisma.paymentReceipt.findMany({
       where,
       orderBy: { submittedAt: 'desc' },
@@ -106,6 +117,7 @@ export async function getPaymentReceipts(req: Request, res: Response): Promise<v
     prisma.paymentReceipt.count({ where: { eventId, status: 'confirmed' } }),
     prisma.paymentReceipt.count({ where: { eventId, status: 'rejected' } }),
     prisma.paymentReceipt.count({ where: { eventId, status: 'pending' } }),
+    prisma.paymentReceipt.count({ where: { eventId, isClaimed: true } }),
   ]);
 
   res.json({
@@ -114,6 +126,7 @@ export async function getPaymentReceipts(req: Request, res: Response): Promise<v
     confirmedTotal,
     rejectedTotal,
     pendingTotal,
+    claimedTotal,
     page,
     totalPages: Math.ceil(total / limit),
     limit,
@@ -136,6 +149,11 @@ export async function confirmPaymentReceipt(req: Request, res: Response): Promis
   const wasConfirmed = receipt.status === 'confirmed';
   const now = new Date();
 
+  const ticketQrCode =
+    receipt.event.hasTickets && !receipt.ticketQrCode
+      ? await generateQR(receipt.id)
+      : undefined;
+
   const updated = await prisma.$transaction(async (tx) => {
     const updatedReceipt = await tx.paymentReceipt.update({
       where: { id },
@@ -144,6 +162,7 @@ export async function confirmPaymentReceipt(req: Request, res: Response): Promis
         confirmedAt: now,
         confirmedBy: req.user!.name,
         note: note ?? null,
+        ...(ticketQrCode ? { ticketQrCode } : {}),
       },
     });
 
@@ -219,7 +238,7 @@ export async function getPaymentReceiptStatus(req: Request, res: Response): Prom
 
   const receipt = await prisma.paymentReceipt.findUnique({
     where: { id },
-    select: { status: true, confirmedAt: true, confirmedBy: true, note: true },
+    include: { event: { select: { title: true, hasTickets: true } } },
   });
 
   if (!receipt) {
@@ -227,5 +246,147 @@ export async function getPaymentReceiptStatus(req: Request, res: Response): Prom
     return;
   }
 
-  res.json(receipt);
+  let ticketQrCode = receipt.ticketQrCode;
+  if (receipt.event.hasTickets && !ticketQrCode) {
+    ticketQrCode = await generateQR(receipt.id);
+    await prisma.paymentReceipt.update({
+      where: { id },
+      data: { ticketQrCode },
+    });
+  }
+
+  res.json({
+    status: receipt.status,
+    confirmedAt: receipt.confirmedAt,
+    confirmedBy: receipt.confirmedBy,
+    note: receipt.note,
+    ticketQrCode: receipt.event.hasTickets ? ticketQrCode : null,
+    hasTickets: receipt.event.hasTickets,
+    eventTitle: receipt.event.title,
+    fullName: receipt.fullName,
+    matricNumber: receipt.matricNumber,
+    isClaimed: receipt.isClaimed,
+    claimedAt: receipt.claimedAt,
+    claimedBy: receipt.claimedBy,
+  });
+}
+
+export async function getMyTickets(req: Request, res: Response): Promise<void> {
+  const { matricNumber } = req.query as { matricNumber?: string };
+
+  if (!matricNumber || !matricNumber.trim()) {
+    res.status(400).json({ error: 'matricNumber is required' });
+    return;
+  }
+
+  const normalized = matricNumber.trim().toUpperCase();
+
+  const receipts = await prisma.paymentReceipt.findMany({
+    where: {
+      matricNumber: normalized,
+      status: 'confirmed',
+      event: { hasTickets: true, isDeleted: false },
+    },
+    include: { event: { select: { title: true, slug: true, amount: true, hasTickets: true } } },
+    orderBy: { confirmedAt: 'desc' },
+  });
+
+  const tickets = [];
+  for (const r of receipts) {
+    let qr = r.ticketQrCode;
+    if (!qr) {
+      qr = await generateQR(r.id);
+      await prisma.paymentReceipt.update({ where: { id: r.id }, data: { ticketQrCode: qr } });
+    }
+    tickets.push({
+      receiptId: r.id,
+      eventTitle: r.event.title,
+      eventSlug: r.event.slug,
+      amount: r.event.amount.toString(),
+      fullName: r.fullName,
+      matricNumber: r.matricNumber,
+      ticketQrCode: qr,
+      isClaimed: r.isClaimed,
+      claimedAt: r.claimedAt,
+      claimedBy: r.claimedBy,
+    });
+  }
+
+  res.json({ tickets });
+}
+
+export async function claimPaymentReceipt(req: Request, res: Response): Promise<void> {
+  const { code } = req.body as { code?: string };
+
+  if (!code || !code.trim()) {
+    res.status(400).json({ error: 'code is required' });
+    return;
+  }
+
+  const normalized = code.trim().replace(/-/g, '');
+  let receipt;
+
+  if (normalized.length === 8) {
+    receipt = await prisma.paymentReceipt.findFirst({
+      where: {
+        id: { startsWith: normalized.toLowerCase() },
+        event: { hasTickets: true },
+      },
+      include: { event: true },
+    });
+  } else {
+    receipt = await prisma.paymentReceipt.findUnique({
+      where: { id: normalized },
+      include: { event: true },
+    });
+    if (receipt && !receipt.event.hasTickets) receipt = null;
+  }
+
+  if (!receipt) {
+    res.status(404).json({ error: 'Ticket not found' });
+    return;
+  }
+
+  if (receipt.status === 'rejected') {
+    res.status(403).json({ error: 'This ticket has been rejected — student should contact fin sec' });
+    return;
+  }
+
+  if (receipt.status !== 'confirmed') {
+    res.status(403).json({ error: 'Payment has not been confirmed yet' });
+    return;
+  }
+
+  if (receipt.isClaimed) {
+    res.json({
+      alreadyClaimed: true,
+      receipt: {
+        fullName: receipt.fullName,
+        matricNumber: receipt.matricNumber,
+        claimedBy: receipt.claimedBy,
+        claimedAt: receipt.claimedAt,
+      },
+    });
+    return;
+  }
+
+  const now = new Date();
+  const updated = await prisma.paymentReceipt.update({
+    where: { id: receipt.id },
+    data: {
+      isClaimed: true,
+      claimedAt: now,
+      claimedBy: req.user!.name,
+    },
+  });
+
+  res.json({
+    alreadyClaimed: false,
+    receipt: {
+      fullName: updated.fullName,
+      matricNumber: updated.matricNumber,
+      claimedBy: updated.claimedBy,
+      claimedAt: updated.claimedAt,
+    },
+  });
 }

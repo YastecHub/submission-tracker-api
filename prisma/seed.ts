@@ -5,10 +5,11 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
-  const [crHash, acrHash, devHash] = await Promise.all([
+  const [crHash, acrHash, devHash, finSecHash] = await Promise.all([
     bcrypt.hash('Abdulbashit@12', 10),
     bcrypt.hash('Chryx@18', 10),
     bcrypt.hash('Yastec01!', 10),
+    bcrypt.hash('esther01!', 10),
   ]);
 
   // Class Representative
@@ -47,9 +48,22 @@ async function main(): Promise<void> {
     },
   });
 
-  console.log('Seeded CR   :', cr.email, '→', cr.name);
-  console.log('Seeded ACR  :', acr.email, '→', acr.name);
-  console.log('Seeded Dev  :', dev.email, '→', dev.name);
+  // Financial Secretary / Treasurer — Esther
+  const finSec = await prisma.user.upsert({
+    where: { email: 'olusegunesther964@gmail.com' },
+    update: { name: 'Esther Olusegun', role: 'fin_sec', passwordHash: finSecHash },
+    create: {
+      email: 'olusegunesther964@gmail.com',
+      passwordHash: finSecHash,
+      name: 'Esther Olusegun',
+      role: 'fin_sec',
+    },
+  });
+
+  console.log('Seeded CR      :', cr.email, '→', cr.name);
+  console.log('Seeded ACR     :', acr.email, '→', acr.name);
+  console.log('Seeded Dev     :', dev.email, '→', dev.name);
+  console.log('Seeded Fin Sec :', finSec.email, '→', finSec.name);
 }
 
 main()

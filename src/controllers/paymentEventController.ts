@@ -50,7 +50,7 @@ export async function listPaymentEvents(req: Request, res: Response): Promise<vo
 }
 
 export async function createPaymentEvent(req: Request, res: Response): Promise<void> {
-  const { title, description, amount, accountNumber, accountName, bankName, deadline } =
+  const { title, description, amount, accountNumber, accountName, bankName, deadline, hasTickets } =
     req.body as {
       title?: string;
       description?: string;
@@ -59,6 +59,7 @@ export async function createPaymentEvent(req: Request, res: Response): Promise<v
       accountName?: string;
       bankName?: string;
       deadline?: string;
+      hasTickets?: boolean;
     };
 
   if (!title || !amount || !accountNumber || !accountName || !bankName || !deadline) {
@@ -86,6 +87,7 @@ export async function createPaymentEvent(req: Request, res: Response): Promise<v
       accountName,
       bankName,
       deadline: new Date(deadline),
+      hasTickets: !!hasTickets,
       createdBy: req.user!.id,
     },
   });
@@ -108,6 +110,7 @@ export async function getPaymentEventBySlug(req: Request, res: Response): Promis
       accountName: true,
       bankName: true,
       deadline: true,
+      hasTickets: true,
       isClosed: true,
       isDeleted: true,
     },
@@ -147,6 +150,35 @@ export async function getPaymentEventById(req: Request, res: Response): Promise<
     rejectedCount,
     pendingCount,
   });
+}
+
+export async function updatePaymentEvent(req: Request, res: Response): Promise<void> {
+  const id = req.params.id as string;
+
+  const event = await prisma.paymentEvent.findFirst({
+    where: { id, isDeleted: false },
+  });
+
+  if (!event) {
+    res.status(404).json({ error: 'Payment event not found' });
+    return;
+  }
+
+  const updates: { hasTickets?: boolean; description?: string | null } = {};
+
+  if (req.body.hasTickets !== undefined) {
+    updates.hasTickets = !!req.body.hasTickets;
+  }
+  if (req.body.description !== undefined) {
+    updates.description = req.body.description?.trim() || null;
+  }
+
+  const updated = await prisma.paymentEvent.update({
+    where: { id },
+    data: updates,
+  });
+
+  res.json(updated);
 }
 
 export async function toggleClosePaymentEvent(req: Request, res: Response): Promise<void> {

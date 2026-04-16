@@ -6,6 +6,8 @@ import {
   confirmPaymentReceipt,
   rejectPaymentReceipt,
   getPaymentReceiptStatus,
+  getMyTickets,
+  claimPaymentReceipt,
 } from '../controllers/paymentReceiptController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import upload from '../middleware/uploadMiddleware';
@@ -37,7 +39,11 @@ router.post('/', handleUpload, submitPaymentReceipt);
 // Public — student polls status
 router.get('/status/:id', getPaymentReceiptStatus);
 
+// Public — student fetches their tickets by matric
+router.get('/my-tickets', getMyTickets);
+
 // Protected — admin routes
+router.post('/scan', authMiddleware, claimPaymentReceipt);
 router.get('/:eventId', authMiddleware, getPaymentReceipts);
 router.patch('/:id/confirm', authMiddleware, confirmPaymentReceipt);
 router.patch('/:id/reject', authMiddleware, rejectPaymentReceipt);

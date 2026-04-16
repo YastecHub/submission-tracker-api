@@ -4,6 +4,7 @@ import {
   createPaymentEvent,
   getPaymentEventBySlug,
   getPaymentEventById,
+  updatePaymentEvent,
   toggleClosePaymentEvent,
   deletePaymentEvent,
 } from '../controllers/paymentEventController';
@@ -18,6 +19,7 @@ router.get('/slug/:slug', getPaymentEventBySlug);
 router.get('/', authMiddleware, listPaymentEvents);
 router.post('/', authMiddleware, createPaymentEvent);
 router.get('/id/:id', authMiddleware, getPaymentEventById);
+router.patch('/:id', authMiddleware, updatePaymentEvent);
 router.patch('/:id/close', authMiddleware, toggleClosePaymentEvent);
 router.delete('/:id', authMiddleware, deletePaymentEvent);
 

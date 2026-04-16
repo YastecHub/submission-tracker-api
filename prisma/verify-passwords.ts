@@ -8,6 +8,7 @@ const expected: Record<string, string> = {
   'abdulbasitopeyemi299@gmail.com': 'Abdulbashit@12',
   'Chryxcreates@gmail.com': 'Chryx@18',
   'yasiroyebo@gmail.com': 'Yastec01!',
+  'olusegunesther964@gmail.com': 'esther01!',
 };
 
 async function main(): Promise<void> {

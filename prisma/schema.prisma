@@ -84,6 +84,7 @@ model PaymentEvent {
   accountName   String
   bankName      String
   deadline      DateTime
+  hasTickets    Boolean         @default(false)
   isClosed      Boolean         @default(false)
   isDeleted     Boolean         @default(false)
   createdBy     String
@@ -106,6 +107,10 @@ model PaymentReceipt {
   confirmedAt     DateTime?
   confirmedBy     String?
   note            String?
+  ticketQrCode    String?
+  isClaimed       Boolean       @default(false)
+  claimedAt       DateTime?
+  claimedBy       String?
   transaction     Transaction?
 
   @@unique([matricNumber, eventId])
