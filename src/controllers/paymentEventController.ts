@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { uniquePaymentSlug } from '../utils/slugGenerator';
+import { generateQR } from '../utils/qrGenerator';
 
 export async function listPaymentEvents(req: Request, res: Response): Promise<void> {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -177,6 +178,18 @@ export async function updatePaymentEvent(req: Request, res: Response): Promise<v
     where: { id },
     data: updates,
   });
+
+  // Backfill QR codes for already-confirmed receipts when tickets are first enabled
+  if (!event.hasTickets && updates.hasTickets === true) {
+    const pending = await prisma.paymentReceipt.findMany({
+      where: { eventId: id, status: 'confirmed', ticketQrCode: null },
+      select: { id: true },
+    });
+    for (const r of pending) {
+      const qr = await generateQR(r.id);
+      await prisma.paymentReceipt.update({ where: { id: r.id }, data: { ticketQrCode: qr } });
+    }
+  }
 
   res.json(updated);
 }
