@@ -6,6 +6,7 @@ import {
   getPaymentEventById,
   updatePaymentEvent,
   toggleClosePaymentEvent,
+  extendPaymentEvent,
   deletePaymentEvent,
 } from '../controllers/paymentEventController';
 import { authMiddleware } from '../middleware/authMiddleware';
@@ -21,6 +22,7 @@ router.post('/', authMiddleware, createPaymentEvent);
 router.get('/id/:id', authMiddleware, getPaymentEventById);
 router.patch('/:id', authMiddleware, updatePaymentEvent);
 router.patch('/:id/close', authMiddleware, toggleClosePaymentEvent);
+router.patch('/:id/extend', authMiddleware, extendPaymentEvent);
 router.delete('/:id', authMiddleware, deletePaymentEvent);
 
 export default router;

@@ -5,6 +5,7 @@ import {
   getEventBySlug,
   getEventById,
   toggleClose,
+  extendEvent,
   deleteEvent,
 } from '../controllers/eventController';
 import { authMiddleware } from '../middleware/authMiddleware';
@@ -206,6 +207,43 @@ router.get('/:slug', getEventBySlug);
  *               $ref: '#/components/schemas/Error'
  */
 router.patch('/:id/close', authMiddleware, toggleClose);
+
+/**
+ * @openapi
+ * /api/events/{id}/extend:
+ *   patch:
+ *     tags: [Events]
+ *     summary: Extend (or reopen with a new deadline) an event
+ *     description: Updates deadline to a future timestamp and clears isClosed.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [deadline]
+ *             properties:
+ *               deadline:
+ *                 type: string
+ *                 format: date-time
+ *     responses:
+ *       200:
+ *         description: Updated event
+ *       400:
+ *         description: Missing or invalid deadline
+ *       404:
+ *         description: Event not found
+ */
+router.patch('/:id/extend', authMiddleware, extendEvent);
 
 /**
  * @openapi

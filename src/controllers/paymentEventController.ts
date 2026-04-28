@@ -214,6 +214,43 @@ export async function toggleClosePaymentEvent(req: Request, res: Response): Prom
   res.json(updated);
 }
 
+export async function extendPaymentEvent(req: Request, res: Response): Promise<void> {
+  const id = req.params.id as string;
+  const { deadline } = req.body as { deadline?: string };
+
+  if (!deadline) {
+    res.status(400).json({ error: 'deadline is required' });
+    return;
+  }
+
+  const newDeadline = new Date(deadline);
+  if (isNaN(newDeadline.getTime())) {
+    res.status(400).json({ error: 'deadline must be a valid date' });
+    return;
+  }
+
+  if (newDeadline <= new Date()) {
+    res.status(400).json({ error: 'deadline must be in the future' });
+    return;
+  }
+
+  const event = await prisma.paymentEvent.findFirst({
+    where: { id, createdBy: req.user!.id, isDeleted: false },
+  });
+
+  if (!event) {
+    res.status(404).json({ error: 'Payment event not found or not authorised' });
+    return;
+  }
+
+  const updated = await prisma.paymentEvent.update({
+    where: { id },
+    data: { deadline: newDeadline, isClosed: false },
+  });
+
+  res.json(updated);
+}
+
 export async function deletePaymentEvent(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
 

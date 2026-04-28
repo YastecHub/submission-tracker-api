@@ -152,6 +152,44 @@ export async function toggleClose(req: Request, res: Response): Promise<void> {
   res.json(updated);
 }
 
+export async function extendEvent(req: Request, res: Response): Promise<void> {
+  const id = req.params.id as string;
+  const { deadline } = req.body as { deadline?: string };
+
+  if (!deadline) {
+    res.status(400).json({ error: 'deadline is required' });
+    return;
+  }
+
+  const newDeadline = new Date(deadline);
+  if (isNaN(newDeadline.getTime())) {
+    res.status(400).json({ error: 'deadline must be a valid date' });
+    return;
+  }
+
+  if (newDeadline <= new Date()) {
+    res.status(400).json({ error: 'deadline must be in the future' });
+    return;
+  }
+
+  const event = await prisma.submissionEvent.findFirst({
+    where: { id, createdBy: req.user!.id, isDeleted: false },
+  });
+
+  if (!event) {
+    res.status(404).json({ error: 'Event not found or not authorised' });
+    return;
+  }
+
+  const updated = await prisma.submissionEvent.update({
+    where: { id },
+    data: { deadline: newDeadline, isClosed: false },
+  });
+
+  cacheDelete(`event:slug:${event.slug}`);
+  res.json(updated);
+}
+
 export async function deleteEvent(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
 
