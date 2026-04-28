@@ -235,11 +235,11 @@ export async function extendPaymentEvent(req: Request, res: Response): Promise<v
   }
 
   const event = await prisma.paymentEvent.findFirst({
-    where: { id, createdBy: req.user!.id, isDeleted: false },
+    where: { id, isDeleted: false },
   });
 
   if (!event) {
-    res.status(404).json({ error: 'Payment event not found or not authorised' });
+    res.status(404).json({ error: 'Payment event not found' });
     return;
   }
 
