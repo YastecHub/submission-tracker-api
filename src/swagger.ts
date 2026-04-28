@@ -1,5 +1,15 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 
+const servers = [
+  ...(process.env.RENDER_EXTERNAL_URL
+    ? [{ url: process.env.RENDER_EXTERNAL_URL, description: 'Production (Render)' }]
+    : []),
+  {
+    url: `http://localhost:${process.env.PORT ?? 3001}`,
+    description: 'Local development server',
+  },
+];
+
 const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
@@ -10,12 +20,7 @@ const options: swaggerJsdoc.Options = {
         'NEXIUM — class submissions, payments and account transparency. ' +
         'CRs create events and confirm submissions; students submit without an account.',
     },
-    servers: [
-      {
-        url: `http://localhost:${process.env.PORT ?? 3001}`,
-        description: 'Local development server',
-      },
-    ],
+    servers,
     components: {
       securitySchemes: {
         bearerAuth: {
