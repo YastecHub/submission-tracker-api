@@ -2,13 +2,19 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
+    },
+  },
+});
 
 async function main(): Promise<void> {
   const [crHash, acrHash, acr2Hash, devHash, finSecHash] = await Promise.all([
     bcrypt.hash('Abdulbashit@12', 10),
     bcrypt.hash('Chryx@18', 10),
-    bcrypt.hash('it’swell622', 10),
+    bcrypt.hash('itswell622', 10),
     bcrypt.hash('Yastec01!', 10),
     bcrypt.hash('esther01!', 10),
   ]);
