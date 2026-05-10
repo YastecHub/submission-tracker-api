@@ -5,6 +5,37 @@ import { uploadImageBuffer, destroyImage } from '../lib/cloudinary';
 
 const AMOUNT_MAX = 10_000_000_000;
 
+interface SerializedTransaction {
+  id: string;
+  type: TransactionType;
+  amount: string;
+  description: string;
+  category: string | null;
+  occurredAt: Date;
+  proofUrl: string | null;
+  recorderName: string | null;
+  recorderRole: string | null;
+  receiptId: string | null;
+  paymentEventId: string | null;
+  paymentEventTitle: string | null;
+  paymentEventSlug: string | null;
+  paymentEventReference: string | null;
+  isDeleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  recordedBy?: string;
+}
+
+interface PaymentEventTransactionGroup {
+  paymentEventId: string;
+  paymentEventTitle: string;
+  paymentEventSlug: string;
+  paymentEventReference: string;
+  totalCollected: string;
+  transactionCount: number;
+  transactions: SerializedTransaction[];
+}
+
 function parseAmount(raw: unknown): Prisma.Decimal | null {
   if (raw === undefined || raw === null || raw === '') return null;
   const num = typeof raw === 'string' ? Number(raw) : typeof raw === 'number' ? raw : NaN;
@@ -26,9 +57,15 @@ function parseOccurredAt(raw: unknown): Date | null {
 }
 
 function serializeTransaction(
-  t: Prisma.TransactionGetPayload<{ include: { recorder: { select: { name: true; role: true } } } }>,
+  t: Prisma.TransactionGetPayload<{
+    include: {
+      recorder: { select: { name: true; role: true } };
+      receipt: { include: { event: { select: { id: true; slug: true; title: true } } } };
+    };
+  }>,
   { includeRecordedBy = false, includeRecorderName = true }: { includeRecordedBy?: boolean; includeRecorderName?: boolean } = {}
-) {
+): SerializedTransaction {
+  const paymentEvent = t.receipt?.event ?? null;
   return {
     id: t.id,
     type: t.type,
@@ -39,11 +76,71 @@ function serializeTransaction(
     proofUrl: t.proofUrl,
     ...(includeRecorderName ? { recorderName: t.recorder?.name ?? null, recorderRole: t.recorder?.role ?? null } : {}),
     receiptId: t.receiptId,
+    paymentEventId: paymentEvent?.id ?? null,
+    paymentEventTitle: paymentEvent?.title ?? null,
+    paymentEventSlug: paymentEvent?.slug ?? null,
+    paymentEventReference: paymentEvent?.slug ?? null,
     isDeleted: t.isDeleted,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
     ...(includeRecordedBy ? { recordedBy: t.recordedBy } : {}),
   };
+}
+
+function sumCredits(transactions: SerializedTransaction[]): string {
+  const total = transactions.reduce((acc, transaction) => {
+    if (transaction.type !== 'credit') return acc;
+    return acc.plus(transaction.amount);
+  }, new Prisma.Decimal(0));
+  return total.toString();
+}
+
+function groupTransactionsByPaymentEvent(transactions: SerializedTransaction[]): {
+  paymentEventGroups: PaymentEventTransactionGroup[];
+  ungroupedTransactions: SerializedTransaction[];
+} {
+  const groups = new Map<
+    string,
+    {
+      paymentEventId: string;
+      paymentEventTitle: string;
+      paymentEventSlug: string;
+      paymentEventReference: string;
+      transactions: SerializedTransaction[];
+    }
+  >();
+  const ungroupedTransactions: SerializedTransaction[] = [];
+
+  for (const transaction of transactions) {
+    if (!transaction.paymentEventId || !transaction.paymentEventTitle) {
+      ungroupedTransactions.push(transaction);
+      continue;
+    }
+
+    if (!groups.has(transaction.paymentEventId)) {
+      groups.set(transaction.paymentEventId, {
+        paymentEventId: transaction.paymentEventId,
+        paymentEventTitle: transaction.paymentEventTitle,
+        paymentEventSlug: transaction.paymentEventSlug ?? transaction.paymentEventReference ?? transaction.paymentEventId,
+        paymentEventReference: transaction.paymentEventReference ?? transaction.paymentEventSlug ?? transaction.paymentEventId,
+        transactions: [],
+      });
+    }
+
+    groups.get(transaction.paymentEventId)!.transactions.push(transaction);
+  }
+
+  const paymentEventGroups = Array.from(groups.values()).map((group) => ({
+    paymentEventId: group.paymentEventId,
+    paymentEventTitle: group.paymentEventTitle,
+    paymentEventSlug: group.paymentEventSlug,
+    paymentEventReference: group.paymentEventReference,
+    totalCollected: sumCredits(group.transactions),
+    transactionCount: group.transactions.length,
+    transactions: group.transactions,
+  }));
+
+  return { paymentEventGroups, ungroupedTransactions };
 }
 
 async function computeLedgerTotals(where: Prisma.TransactionWhereInput) {
@@ -82,14 +179,22 @@ export async function getLedger(req: Request, res: Response): Promise<void> {
       orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
-      include: { recorder: { select: { name: true, role: true } } },
+      include: {
+        recorder: { select: { name: true, role: true } },
+        receipt: { include: { event: { select: { id: true, slug: true, title: true } } } },
+      },
     }),
     computeLedgerTotals({ isDeleted: false }),
   ]);
 
+  const serializedTransactions = transactions.map((t) => serializeTransaction(t, { includeRecorderName: true }));
+  const { paymentEventGroups, ungroupedTransactions } = groupTransactionsByPaymentEvent(serializedTransactions);
+
   res.json({
     ...totals,
-    transactions: transactions.map((t) => serializeTransaction(t, { includeRecorderName: true })),
+    transactions: serializedTransactions,
+    paymentEventGroups,
+    ungroupedTransactions,
     page,
     limit,
     totalPages: Math.ceil(totals.transactionCount / limit),
