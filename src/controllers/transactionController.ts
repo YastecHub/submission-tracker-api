@@ -74,7 +74,8 @@ function serializeTransaction(
     category: t.category,
     occurredAt: t.occurredAt,
     proofUrl: t.proofUrl,
-    ...(includeRecorderName ? { recorderName: t.recorder?.name ?? null, recorderRole: t.recorder?.role ?? null } : {}),
+    recorderName: includeRecorderName ? t.recorder?.name ?? null : null,
+    recorderRole: includeRecorderName ? t.recorder?.role ?? null : null,
     receiptId: t.receiptId,
     paymentEventId: paymentEvent?.id ?? null,
     paymentEventTitle: paymentEvent?.title ?? null,
@@ -259,7 +260,10 @@ export async function listTransactionsAdmin(req: Request, res: Response): Promis
       orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
-      include: { recorder: { select: { name: true, role: true } } },
+      include: {
+        recorder: { select: { name: true, role: true } },
+        receipt: { include: { event: { select: { id: true, slug: true, title: true } } } },
+      },
     }),
     computeLedgerTotals({ isDeleted: false }),
   ]);
@@ -330,7 +334,10 @@ export async function createTransaction(req: Request, res: Response): Promise<vo
       proofPublicId,
       recordedBy: req.user!.id,
     },
-    include: { recorder: { select: { name: true, role: true } } },
+    include: {
+      recorder: { select: { name: true, role: true } },
+      receipt: { include: { event: { select: { id: true, slug: true, title: true } } } },
+    },
   });
 
   res.status(201).json(serializeTransaction(created, { includeRecordedBy: true, includeRecorderName: true }));
@@ -416,7 +423,10 @@ export async function updateTransaction(req: Request, res: Response): Promise<vo
   const updated = await prisma.transaction.update({
     where: { id },
     data: updates,
-    include: { recorder: { select: { name: true, role: true } } },
+    include: {
+      recorder: { select: { name: true, role: true } },
+      receipt: { include: { event: { select: { id: true, slug: true, title: true } } } },
+    },
   });
 
   res.json(serializeTransaction(updated, { includeRecordedBy: true, includeRecorderName: true }));
