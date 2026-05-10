@@ -5,9 +5,10 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
-  const [crHash, acrHash, devHash, finSecHash] = await Promise.all([
+  const [crHash, acrHash, acr2Hash, devHash, finSecHash] = await Promise.all([
     bcrypt.hash('Abdulbashit@12', 10),
     bcrypt.hash('Chryx@18', 10),
+    bcrypt.hash('it’swell622', 10),
     bcrypt.hash('Yastec01!', 10),
     bcrypt.hash('esther01!', 10),
   ]);
@@ -32,6 +33,18 @@ async function main(): Promise<void> {
       email: 'Chryxcreates@gmail.com',
       passwordHash: acrHash,
       name: 'Oreoluwa',
+      role: 'acr',
+    },
+  });
+
+  // Assistant CR 2
+  const acr2 = await prisma.user.upsert({
+    where: { email: 'ayomideamisu622@gmail.com' },
+    update: { name: 'ACR2', role: 'acr', passwordHash: acr2Hash },
+    create: {
+      email: 'ayomideamisu622@gmail.com',
+      passwordHash: acr2Hash,
+      name: 'ACR2',
       role: 'acr',
     },
   });
@@ -62,6 +75,7 @@ async function main(): Promise<void> {
 
   console.log('Seeded CR      :', cr.email, '→', cr.name);
   console.log('Seeded ACR     :', acr.email, '→', acr.name);
+  console.log('Seeded ACR2    :', acr2.email, '→', acr2.name);
   console.log('Seeded Dev     :', dev.email, '→', dev.name);
   console.log('Seeded Fin Sec :', finSec.email, '→', finSec.name);
 }
