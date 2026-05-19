@@ -11,46 +11,33 @@ const prisma = new PrismaClient({
 });
 
 async function main(): Promise<void> {
-  const [crHash, acrHash, acr2Hash, devHash, finSecHash] = await Promise.all([
-    bcrypt.hash('Abdulbashit@12', 10),
+  const [crHash, acrHash, devHash, finSecHash] = await Promise.all([
     bcrypt.hash('Chryx@18', 10),
     bcrypt.hash('itswell622', 10),
     bcrypt.hash('Yastec01!', 10),
     bcrypt.hash('esther01!', 10),
   ]);
 
-  // Class Representative
-  const cr = await prisma.user.upsert({
-    where: { email: 'abdulbasitopeyemi299@gmail.com' },
-    update: { name: 'Abdulbasit Opeyemi', role: 'cr', passwordHash: crHash },
+  // Promote current ACR to Class Representative
+  const acr = await prisma.user.upsert({
+    where: { email: 'Chryxcreates@gmail.com' },
+    update: { name: 'Oreoluwa', role: 'cr', passwordHash: crHash },
     create: {
-      email: 'abdulbasitopeyemi299@gmail.com',
+      email: 'Chryxcreates@gmail.com',
       passwordHash: crHash,
-      name: 'Abdulbasit Opeyemi',
+      name: 'Oreoluwa',
       role: 'cr',
     },
   });
 
-  // Assistant CR — Oreoluwa
-  const acr = await prisma.user.upsert({
-    where: { email: 'Chryxcreates@gmail.com' },
-    update: { name: 'Oreoluwa', role: 'acr', passwordHash: acrHash },
-    create: {
-      email: 'Chryxcreates@gmail.com',
-      passwordHash: acrHash,
-      name: 'Oreoluwa',
-      role: 'acr',
-    },
-  });
-
-  // Assistant CR 2
+  // Assistant CR (promoted from ACR2)
   const acr2 = await prisma.user.upsert({
     where: { email: 'ayomideamisu622@gmail.com' },
-    update: { name: 'ACR2', role: 'acr', passwordHash: acr2Hash },
+    update: { name: 'ACR', role: 'acr', passwordHash: acrHash },
     create: {
       email: 'ayomideamisu622@gmail.com',
-      passwordHash: acr2Hash,
-      name: 'ACR2',
+      passwordHash: acrHash,
+      name: 'Ayomide Amisu',
       role: 'acr',
     },
   });
@@ -79,9 +66,8 @@ async function main(): Promise<void> {
     },
   });
 
-  console.log('Seeded CR      :', cr.email, '→', cr.name);
-  console.log('Seeded ACR     :', acr.email, '→', acr.name);
-  console.log('Seeded ACR2    :', acr2.email, '→', acr2.name);
+  console.log('Seeded CR      :', acr.email, '→', acr.name);
+  console.log('Seeded ACR     :', acr2.email, '→', acr2.name);
   console.log('Seeded Dev     :', dev.email, '→', dev.name);
   console.log('Seeded Fin Sec :', finSec.email, '→', finSec.name);
 }
