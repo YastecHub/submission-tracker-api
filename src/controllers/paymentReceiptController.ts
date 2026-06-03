@@ -4,25 +4,18 @@ import prisma from '../lib/prisma';
 import { uploadImageBuffer } from '../lib/cloudinary';
 import { generateQR } from '../utils/qrGenerator';
 import { exportPaymentReceipts } from '../utils/excelExporter';
-
-function parseReceiptAmount(raw: unknown): Prisma.Decimal | null {
-  if (raw === undefined || raw === null || raw === '') return null;
-  const num = typeof raw === 'string' ? Number(raw) : typeof raw === 'number' ? raw : NaN;
-  if (!Number.isFinite(num) || num <= 0) return null;
-  return new Prisma.Decimal(num.toFixed(2));
-}
+import { checkReceiptAmountInBackground } from '../utils/receiptAmountChecker';
 
 export async function submitPaymentReceipt(req: Request, res: Response): Promise<void> {
-  const { eventId, fullName, matricNumber, level, amountPaid } = req.body as {
+  const { eventId, fullName, matricNumber, level } = req.body as {
     eventId?: string;
     fullName?: string;
     matricNumber?: string;
     level?: string;
-    amountPaid?: string;
   };
 
-  if (!eventId || !fullName || !matricNumber || !amountPaid) {
-    res.status(400).json({ error: 'eventId, fullName, matricNumber, and amountPaid are required' });
+  if (!eventId || !fullName || !matricNumber) {
+    res.status(400).json({ error: 'eventId, fullName, and matricNumber are required' });
     return;
   }
 
@@ -39,19 +32,6 @@ export async function submitPaymentReceipt(req: Request, res: Response): Promise
 
   if (event.isClosed || new Date() > new Date(event.deadline)) {
     res.status(403).json({ error: 'Payment event is closed or deadline has passed' });
-    return;
-  }
-
-  const parsedAmountPaid = parseReceiptAmount(amountPaid);
-  if (!parsedAmountPaid) {
-    res.status(400).json({ error: 'amountPaid must be a positive number' });
-    return;
-  }
-
-  if (!parsedAmountPaid.equals(event.amount)) {
-    res.status(400).json({
-      error: `Amount paid must match the expected amount of NGN ${event.amount.toString()}`,
-    });
     return;
   }
 
@@ -80,23 +60,27 @@ export async function submitPaymentReceipt(req: Request, res: Response): Promise
       fullName: fullName.trim(),
       matricNumber: matricNumber.trim().toUpperCase(),
       level: level ?? null,
-      amountPaid: parsedAmountPaid,
       receiptUrl,
       receiptPublicId,
     },
   });
 
+  let responseReceipt = receipt;
   if (event.hasTickets && !receipt.ticketQrCode) {
     const ticketQrCode = await generateQR(receipt.id);
-    const updated = await prisma.paymentReceipt.update({
+    responseReceipt = await prisma.paymentReceipt.update({
       where: { id: receipt.id },
       data: { ticketQrCode },
     });
-    res.status(201).json({ receipt: updated });
-    return;
   }
 
-  res.status(201).json({ receipt });
+  res.status(201).json({ receipt: responseReceipt });
+
+  void checkReceiptAmountInBackground({
+    receiptId: receipt.id,
+    receiptUrl,
+    expectedAmount: event.amount,
+  }).catch((err) => console.error('[receipt amount check]', err));
 }
 
 export async function getPaymentReceipts(req: Request, res: Response): Promise<void> {
@@ -317,6 +301,11 @@ export async function getPaymentReceiptStatus(req: Request, res: Response): Prom
     eventTitle: receipt.event.title,
     fullName: receipt.fullName,
     matricNumber: receipt.matricNumber,
+    extractedAmount: receipt.extractedAmount?.toString() ?? null,
+    amountCheckStatus: receipt.amountCheckStatus,
+    amountCheckConfidence: receipt.amountCheckConfidence,
+    amountCheckNote: receipt.amountCheckNote,
+    amountCheckedAt: receipt.amountCheckedAt,
     isClaimed: receipt.isClaimed,
     claimedAt: receipt.claimedAt,
     claimedBy: receipt.claimedBy,

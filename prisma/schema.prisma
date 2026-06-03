@@ -77,6 +77,14 @@ enum PaymentStatus {
   rejected
 }
 
+enum AmountCheckStatus {
+  pending
+  matched
+  mismatch
+  unreadable
+  unavailable
+}
+
 model PaymentEvent {
   id            String          @id @default(uuid())
   slug          String          @unique
@@ -103,7 +111,11 @@ model PaymentReceipt {
   fullName        String
   matricNumber    String
   level           String?
-  amountPaid      Decimal?      @db.Decimal(10, 2)
+  extractedAmount Decimal?      @db.Decimal(10, 2)
+  amountCheckStatus AmountCheckStatus @default(pending)
+  amountCheckConfidence Float?
+  amountCheckNote String?
+  amountCheckedAt DateTime?
   receiptUrl      String
   receiptPublicId String
   submittedAt     DateTime      @default(now())
@@ -122,6 +134,7 @@ model PaymentReceipt {
   @@index([eventId, matricNumber])
   @@index([eventId, status])
   @@index([eventId, isClaimed])
+  @@index([eventId, amountCheckStatus])
 }
 
 enum TransactionType {
