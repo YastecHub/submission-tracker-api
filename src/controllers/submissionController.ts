@@ -5,7 +5,7 @@ import { generateQR } from '../utils/qrGenerator';
 import { exportSubmissions } from '../utils/excelExporter';
 import { sendPush } from '../utils/pushNotifier';
 
-const CONFIRM_ALL_MIN_SUBMISSIONS = 100;
+const CONFIRM_ALL_MIN_SUBMISSIONS = 90;
 
 export async function createSubmission(req: Request, res: Response): Promise<void> {
   const { eventId, fullName, matricNumber, level } = req.body as {
