@@ -5,6 +5,8 @@ import { generateQR } from '../utils/qrGenerator';
 import { exportSubmissions } from '../utils/excelExporter';
 import { sendPush } from '../utils/pushNotifier';
 
+const CONFIRM_ALL_MIN_SUBMISSIONS = 100;
+
 export async function createSubmission(req: Request, res: Response): Promise<void> {
   const { eventId, fullName, matricNumber, level } = req.body as {
     eventId?: string;
@@ -83,18 +85,20 @@ export async function getSubmissions(req: Request, res: Response): Promise<void>
     return;
   }
 
-  const searchWhere: Prisma.SubmissionWhereInput = search
+  const effectiveSearch = search.length >= 2 ? search : '';
+
+  const searchWhere: Prisma.SubmissionWhereInput = effectiveSearch
     ? {
         OR: [
-          { fullName: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { matricNumber: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { fullName: { contains: effectiveSearch, mode: Prisma.QueryMode.insensitive } },
+          { matricNumber: { contains: effectiveSearch, mode: Prisma.QueryMode.insensitive } },
         ],
       }
     : {};
 
   const where: Prisma.SubmissionWhereInput = { eventId, ...searchWhere };
 
-  const [submissions, total, confirmedTotal] = await Promise.all([
+  const [submissions, total, confirmedTotal, pendingTotal] = await Promise.all([
     prisma.submission.findMany({
       where,
       orderBy: { submittedAt: 'desc' },
@@ -103,13 +107,14 @@ export async function getSubmissions(req: Request, res: Response): Promise<void>
     }),
     prisma.submission.count({ where }),
     prisma.submission.count({ where: { eventId, isConfirmed: true } }),
+    prisma.submission.count({ where: { eventId, isConfirmed: false } }),
   ]);
 
   res.json({
     submissions,
     total,
     confirmedTotal,
-    pendingTotal: await prisma.submission.count({ where: { eventId, isConfirmed: false } }),
+    pendingTotal,
     page,
     totalPages: Math.ceil(total / limit),
     limit,
@@ -162,6 +167,46 @@ export async function scanConfirm(req: Request, res: Response): Promise<void> {
   });
 
   res.json({ alreadyConfirmed: false, submission: updated });
+}
+
+export async function confirmAllSubmissions(req: Request, res: Response): Promise<void> {
+  const eventId = req.params.eventId as string;
+
+  const event = await prisma.submissionEvent.findFirst({
+    where: { id: eventId, isDeleted: false },
+  });
+  if (!event) {
+    res.status(404).json({ error: 'Event not found' });
+    return;
+  }
+
+  const [total, pendingTotal] = await Promise.all([
+    prisma.submission.count({ where: { eventId } }),
+    prisma.submission.count({ where: { eventId, isConfirmed: false } }),
+  ]);
+
+  if (total < CONFIRM_ALL_MIN_SUBMISSIONS) {
+    res.status(400).json({
+      error: `Confirm all is only available after at least ${CONFIRM_ALL_MIN_SUBMISSIONS} students have submitted.`,
+    });
+    return;
+  }
+
+  if (pendingTotal === 0) {
+    res.json({ confirmedCount: 0, total, pendingTotal: 0 });
+    return;
+  }
+
+  const result = await prisma.submission.updateMany({
+    where: { eventId, isConfirmed: false },
+    data: {
+      isConfirmed: true,
+      confirmedAt: new Date(),
+      confirmedBy: req.user!.name,
+    },
+  });
+
+  res.json({ confirmedCount: result.count, total, pendingTotal: 0 });
 }
 
 export async function getSubmissionStatus(req: Request, res: Response): Promise<void> {

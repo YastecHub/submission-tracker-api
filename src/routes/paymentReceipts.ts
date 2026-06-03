@@ -8,6 +8,7 @@ import {
   getPaymentReceiptStatus,
   getMyTickets,
   claimPaymentReceipt,
+  exportPaymentReceiptsToExcel,
 } from '../controllers/paymentReceiptController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import upload from '../middleware/uploadMiddleware';
@@ -44,6 +45,7 @@ router.get('/my-tickets', getMyTickets);
 
 // Protected — admin routes
 router.post('/scan', authMiddleware, claimPaymentReceipt);
+router.get('/:eventId/export', authMiddleware, exportPaymentReceiptsToExcel);
 router.get('/:eventId', authMiddleware, getPaymentReceipts);
 router.patch('/:id/confirm', authMiddleware, confirmPaymentReceipt);
 router.patch('/:id/reject', authMiddleware, rejectPaymentReceipt);

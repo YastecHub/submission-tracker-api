@@ -3,17 +3,26 @@ import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { uploadImageBuffer } from '../lib/cloudinary';
 import { generateQR } from '../utils/qrGenerator';
+import { exportPaymentReceipts } from '../utils/excelExporter';
+
+function parseReceiptAmount(raw: unknown): Prisma.Decimal | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  const num = typeof raw === 'string' ? Number(raw) : typeof raw === 'number' ? raw : NaN;
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return new Prisma.Decimal(num.toFixed(2));
+}
 
 export async function submitPaymentReceipt(req: Request, res: Response): Promise<void> {
-  const { eventId, fullName, matricNumber, level } = req.body as {
+  const { eventId, fullName, matricNumber, level, amountPaid } = req.body as {
     eventId?: string;
     fullName?: string;
     matricNumber?: string;
     level?: string;
+    amountPaid?: string;
   };
 
-  if (!eventId || !fullName || !matricNumber) {
-    res.status(400).json({ error: 'eventId, fullName, and matricNumber are required' });
+  if (!eventId || !fullName || !matricNumber || !amountPaid) {
+    res.status(400).json({ error: 'eventId, fullName, matricNumber, and amountPaid are required' });
     return;
   }
 
@@ -30,6 +39,19 @@ export async function submitPaymentReceipt(req: Request, res: Response): Promise
 
   if (event.isClosed || new Date() > new Date(event.deadline)) {
     res.status(403).json({ error: 'Payment event is closed or deadline has passed' });
+    return;
+  }
+
+  const parsedAmountPaid = parseReceiptAmount(amountPaid);
+  if (!parsedAmountPaid) {
+    res.status(400).json({ error: 'amountPaid must be a positive number' });
+    return;
+  }
+
+  if (!parsedAmountPaid.equals(event.amount)) {
+    res.status(400).json({
+      error: `Amount paid must match the expected amount of NGN ${event.amount.toString()}`,
+    });
     return;
   }
 
@@ -58,6 +80,7 @@ export async function submitPaymentReceipt(req: Request, res: Response): Promise
       fullName: fullName.trim(),
       matricNumber: matricNumber.trim().toUpperCase(),
       level: level ?? null,
+      amountPaid: parsedAmountPaid,
       receiptUrl,
       receiptPublicId,
     },
@@ -90,11 +113,13 @@ export async function getPaymentReceipts(req: Request, res: Response): Promise<v
     return;
   }
 
-  const searchWhere: Prisma.PaymentReceiptWhereInput = search
+  const effectiveSearch = search.length >= 2 ? search : '';
+
+  const searchWhere: Prisma.PaymentReceiptWhereInput = effectiveSearch
     ? {
         OR: [
-          { fullName: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { matricNumber: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { fullName: { contains: effectiveSearch, mode: Prisma.QueryMode.insensitive } },
+          { matricNumber: { contains: effectiveSearch, mode: Prisma.QueryMode.insensitive } },
         ],
       }
     : {};
@@ -131,6 +156,33 @@ export async function getPaymentReceipts(req: Request, res: Response): Promise<v
     totalPages: Math.ceil(total / limit),
     limit,
   });
+}
+
+export async function exportPaymentReceiptsToExcel(req: Request, res: Response): Promise<void> {
+  const eventId = req.params.eventId as string;
+
+  const event = await prisma.paymentEvent.findFirst({
+    where: { id: eventId, isDeleted: false },
+  });
+
+  if (!event) {
+    res.status(404).json({ error: 'Payment event not found' });
+    return;
+  }
+
+  const receipts = await prisma.paymentReceipt.findMany({
+    where: { eventId },
+    orderBy: [{ status: 'asc' }, { submittedAt: 'asc' }],
+  });
+
+  const { buffer, filename } = exportPaymentReceipts(receipts, event);
+
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+  res.send(buffer);
 }
 
 export async function confirmPaymentReceipt(req: Request, res: Response): Promise<void> {

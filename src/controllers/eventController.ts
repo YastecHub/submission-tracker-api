@@ -8,6 +8,10 @@ type EventWithCount = Prisma.SubmissionEventGetPayload<{
   include: { _count: { select: { submissions: true } } };
 }>;
 
+function manageableByUser(user: Express.Request['user']) {
+  return user!.role === 'dev' ? {} : { createdBy: user!.id };
+}
+
 export async function listEvents(req: Request, res: Response): Promise<void> {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
@@ -133,9 +137,9 @@ export async function getEventById(req: Request, res: Response): Promise<void> {
 export async function toggleClose(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
 
-  // Only the creator can close/reopen their own event
+  // The creator manages their own event; dev can manage all events.
   const event = await prisma.submissionEvent.findFirst({
-    where: { id, createdBy: req.user!.id, isDeleted: false },
+    where: { id, ...manageableByUser(req.user), isDeleted: false },
   });
 
   if (!event) {
@@ -173,7 +177,7 @@ export async function extendEvent(req: Request, res: Response): Promise<void> {
   }
 
   const event = await prisma.submissionEvent.findFirst({
-    where: { id, createdBy: req.user!.id, isDeleted: false },
+    where: { id, ...manageableByUser(req.user), isDeleted: false },
   });
 
   if (!event) {
@@ -193,9 +197,9 @@ export async function extendEvent(req: Request, res: Response): Promise<void> {
 export async function deleteEvent(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
 
-  // Only the creator can delete their own event
+  // The creator manages their own event; dev can manage all events.
   const event = await prisma.submissionEvent.findFirst({
-    where: { id, createdBy: req.user!.id, isDeleted: false },
+    where: { id, ...manageableByUser(req.user), isDeleted: false },
   });
 
   if (!event) {

@@ -66,6 +66,9 @@ model Submission {
   confirmedBy  String?
 
   @@unique([matricNumber, eventId])
+  @@index([eventId, fullName])
+  @@index([eventId, matricNumber])
+  @@index([eventId, isConfirmed])
 }
 
 enum PaymentStatus {
@@ -100,6 +103,7 @@ model PaymentReceipt {
   fullName        String
   matricNumber    String
   level           String?
+  amountPaid      Decimal?      @db.Decimal(10, 2)
   receiptUrl      String
   receiptPublicId String
   submittedAt     DateTime      @default(now())
@@ -114,6 +118,10 @@ model PaymentReceipt {
   transaction     Transaction?
 
   @@unique([matricNumber, eventId])
+  @@index([eventId, fullName])
+  @@index([eventId, matricNumber])
+  @@index([eventId, status])
+  @@index([eventId, isClaimed])
 }
 
 enum TransactionType {

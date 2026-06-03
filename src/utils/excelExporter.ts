@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Submission, SubmissionEvent } from '@prisma/client';
+import type { PaymentEvent, PaymentReceipt, Submission, SubmissionEvent } from '@prisma/client';
 import { format } from './dateFormat';
 
 export function exportSubmissions(
@@ -65,6 +65,100 @@ export function exportSubmissions(
 
   const date = new Date().toISOString().slice(0, 10);
   const filename = `${event.courseCode}_${event.title}_${date}.xlsx`.replace(
+    /[^a-zA-Z0-9_\-.]/g,
+    '_'
+  );
+
+  return {
+    buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellStyles: true }) as Buffer,
+    filename,
+  };
+}
+
+export function exportPaymentReceipts(
+  receipts: PaymentReceipt[],
+  event: PaymentEvent
+): { buffer: Buffer; filename: string } {
+  const wb = XLSX.utils.book_new();
+
+  const headers = [
+    'S/N',
+    'Full Name',
+    'Matric Number',
+    'Level',
+    'Expected Amount',
+    'Amount Paid',
+    'Status',
+    'Submitted At',
+    'Reviewed At',
+    'Reviewed By',
+    'Note',
+    'Collected',
+    'Collected At',
+    'Collected By',
+  ];
+
+  const rows = receipts.map((r, i) => [
+    i + 1,
+    r.fullName,
+    r.matricNumber,
+    r.level ?? '',
+    event.amount.toString(),
+    r.amountPaid?.toString() ?? '',
+    r.status,
+    format(r.submittedAt),
+    r.confirmedAt ? format(r.confirmedAt) : '',
+    r.confirmedBy ?? '',
+    r.note ?? '',
+    r.isClaimed ? 'Yes' : 'No',
+    r.claimedAt ? format(r.claimedAt) : '',
+    r.claimedBy ?? '',
+  ]);
+
+  const wsData = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  ws['!cols'] = [
+    { wch: 6 },
+    { wch: 30 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 25 },
+    { wch: 30 },
+    { wch: 12 },
+    { wch: 22 },
+    { wch: 25 },
+  ];
+
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!ws[cellAddr]) continue;
+      ws[cellAddr].s = {
+        font: R === 0 ? { bold: true } : {},
+        border: {
+          top: { style: 'thin' },
+          bottom: { style: 'thin' },
+          left: { style: 'thin' },
+          right: { style: 'thin' },
+        },
+        alignment: { vertical: 'center' },
+      };
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Payment Receipts');
+
+  const date = new Date().toISOString().slice(0, 10);
+  const filename = `Payments_${event.title}_${date}.xlsx`.replace(
     /[^a-zA-Z0-9_\-.]/g,
     '_'
   );

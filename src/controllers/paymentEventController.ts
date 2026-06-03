@@ -4,6 +4,10 @@ import prisma from '../lib/prisma';
 import { uniquePaymentSlug } from '../utils/slugGenerator';
 import { generateQR } from '../utils/qrGenerator';
 
+function manageableByUser(user: Express.Request['user']) {
+  return user!.role === 'dev' ? {} : { createdBy: user!.id };
+}
+
 export async function listPaymentEvents(req: Request, res: Response): Promise<void> {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
@@ -198,7 +202,7 @@ export async function toggleClosePaymentEvent(req: Request, res: Response): Prom
   const id = req.params.id as string;
 
   const event = await prisma.paymentEvent.findFirst({
-    where: { id, createdBy: req.user!.id, isDeleted: false },
+    where: { id, ...manageableByUser(req.user), isDeleted: false },
   });
 
   if (!event) {
@@ -255,7 +259,7 @@ export async function deletePaymentEvent(req: Request, res: Response): Promise<v
   const id = req.params.id as string;
 
   const event = await prisma.paymentEvent.findFirst({
-    where: { id, createdBy: req.user!.id, isDeleted: false },
+    where: { id, ...manageableByUser(req.user), isDeleted: false },
   });
 
   if (!event) {

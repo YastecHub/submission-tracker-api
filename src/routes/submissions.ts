@@ -3,6 +3,7 @@ import {
   createSubmission,
   getSubmissions,
   confirmSubmission,
+  confirmAllSubmissions,
   scanConfirm,
   exportToExcel,
   getSubmissionStatus,
@@ -185,6 +186,7 @@ router.get('/status/:id', getSubmissionStatus);
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/:eventId/export', authMiddleware, exportToExcel);
+router.patch('/:eventId/confirm-all', authMiddleware, confirmAllSubmissions);
 
 /**
  * @openapi
