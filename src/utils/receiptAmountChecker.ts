@@ -1,4 +1,6 @@
 import { Prisma } from '@prisma/client';
+import { spawn } from 'child_process';
+import { join } from 'path';
 import prisma from '../lib/prisma';
 
 type CheckStatus = 'matched' | 'mismatch' | 'unreadable' | 'unavailable';
@@ -73,14 +75,55 @@ async function extractWithFallbackOcr(receiptUrl: string): Promise<{
   confidence: number;
   note: string;
 } | null> {
-  const { createWorker } = (await import('tesseract.js')) as typeof import('tesseract.js');
-  const worker = await createWorker('eng');
-  try {
-    const result = await worker.recognize(receiptUrl);
-    return parseOcrAmount(result.data.text);
-  } finally {
-    await worker.terminate();
-  }
+  const workerPath = join(__dirname, 'receiptOcrWorker.js');
+
+  const text = await new Promise<string | null>((resolve) => {
+    const child = spawn(process.execPath, [workerPath, receiptUrl], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+
+    let stdout = '';
+    let settled = false;
+
+    const finish = (value: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(value);
+    };
+
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(null);
+    }, 30_000);
+
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+
+    child.on('error', () => finish(null));
+    child.on('close', (code) => {
+      if (code !== 0 || !stdout.trim()) {
+        finish(null);
+        return;
+      }
+
+      try {
+        const lines = stdout.trim().split(/\r?\n/);
+        const result = JSON.parse(lines[lines.length - 1]) as {
+          ok?: boolean;
+          text?: string;
+        };
+        finish(result.ok && typeof result.text === 'string' ? result.text : null);
+      } catch {
+        finish(null);
+      }
+    });
+  });
+
+  return text ? parseOcrAmount(text) : null;
 }
 
 async function markReceipt(

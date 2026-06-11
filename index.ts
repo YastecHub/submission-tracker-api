@@ -19,6 +19,9 @@ import transactionRoutes from './src/routes/transactions';
 
 const app = express();
 
+// Render forwards the original client IP through one trusted proxy.
+app.set('trust proxy', 1);
+
 app.use(
   cors({
     origin: process.env.CLIENT_URL ?? '*',
