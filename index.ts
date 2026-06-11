@@ -80,8 +80,16 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
+const HOST = process.env.HOST ?? '0.0.0.0';
 
-app.listen(PORT, async () => {
+const server = app.listen(PORT, HOST);
+
+server.on('error', (error) => {
+  console.error(`Failed to bind API server on ${HOST}:${PORT}`, error);
+  process.exitCode = 1;
+});
+
+server.on('listening', async () => {
   // Use Render's public URL in production, otherwise localhost
   const base = process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${PORT}`;
 

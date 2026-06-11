@@ -3,7 +3,8 @@ services:
     name: submission-tracker-api
     runtime: node
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    startCommand: node dist/index.js
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
