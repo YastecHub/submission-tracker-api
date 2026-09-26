@@ -1,237 +1,34 @@
-import { Request, Response } from 'express';
-import { EventType, Prisma } from '@prisma/client';
-import { uniqueSlug } from '../utils/slugGenerator';
-import prisma from '../lib/prisma';
-import { cacheGet, cacheSet, cacheDelete } from '../utils/cache';
+import { submissionEventService } from '../modules/submissionEvents/application/submissionEventService';
+import { created, ok } from '../shared/http/controller';
+import { routeParam } from '../shared/http/param';
 
-type EventWithCount = Prisma.SubmissionEventGetPayload<{
-  include: { _count: { select: { submissions: true } } };
-}>;
+export const listEvents = ok((req) =>
+  submissionEventService.list({
+    page: req.query.page as string | undefined,
+    limit: req.query.limit as string | undefined,
+  })
+);
 
-function manageableByUser(user: Express.Request['user']) {
-  return user!.role === 'dev' ? {} : { createdBy: user!.id };
-}
+export const createEvent = created((req) =>
+  submissionEventService.create({ ...req.body, userId: req.user!.id })
+);
 
-function canManageEvent(user: Express.Request['user'], event: { createdBy: string }): boolean {
-  return user!.role === 'dev' || event.createdBy === user!.id;
-}
+export const getEventBySlug = ok((req) =>
+  submissionEventService.getPublicBySlug(routeParam(req.params.slug))
+);
 
-export async function listEvents(req: Request, res: Response): Promise<void> {
-  const page = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
-  const skip = (page - 1) * limit;
+export const getEventById = ok((req) =>
+  submissionEventService.getById(routeParam(req.params.id), req.user)
+);
 
-  // All non-deleted events are visible to every logged-in user
-  const [events, total, confirmedGroups] = await Promise.all([
-    prisma.submissionEvent.findMany({
-      where: { isDeleted: false },
-      orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { submissions: true } } },
-      skip,
-      take: limit,
-    }),
-    prisma.submissionEvent.count({ where: { isDeleted: false } }),
-    prisma.submission.groupBy({
-      by: ['eventId'],
-      where: { isConfirmed: true },
-      _count: { id: true },
-    }),
-  ]);
+export const toggleClose = ok((req) =>
+  submissionEventService.toggleClose(routeParam(req.params.id), req.user)
+);
 
-  const confirmedMap = new Map(confirmedGroups.map((g) => [g.eventId, g._count.id]));
+export const extendEvent = ok((req) =>
+  submissionEventService.extend(routeParam(req.params.id), req.body.deadline, req.user)
+);
 
-  const eventsWithStats = events.map((event: EventWithCount) => {
-    const confirmedCount = confirmedMap.get(event.id) ?? 0;
-    return {
-      ...event,
-      totalSubmissions: event._count.submissions,
-      confirmedCount,
-      pendingCount: event._count.submissions - confirmedCount,
-    };
-  });
-
-  res.json({ events: eventsWithStats, total, page, totalPages: Math.ceil(total / limit) });
-}
-
-export async function createEvent(req: Request, res: Response): Promise<void> {
-  const { title, courseCode, type, description, deadline } = req.body as {
-    title?: string;
-    courseCode?: string;
-    type?: EventType;
-    description?: string;
-    deadline?: string;
-  };
-
-  if (!title || !courseCode || !deadline) {
-    res.status(400).json({ error: 'title, courseCode, and deadline are required' });
-    return;
-  }
-
-  const cleanTitle = title.trim();
-  const cleanCourseCode = courseCode.trim().toUpperCase();
-  const cleanDescription = description?.trim() || null;
-  const validTypes: EventType[] = ['assignment', 'attendance', 'lab', 'other'];
-  const eventType = type && validTypes.includes(type) ? type : 'assignment';
-  const parsedDeadline = new Date(deadline);
-
-  if (!cleanTitle || !cleanCourseCode || cleanTitle.length > 150 || cleanCourseCode.length > 30) {
-    res.status(400).json({ error: 'title and courseCode must be valid and reasonably short' });
-    return;
-  }
-  if (Number.isNaN(parsedDeadline.getTime()) || parsedDeadline <= new Date()) {
-    res.status(400).json({ error: 'deadline must be a valid future date' });
-    return;
-  }
-
-  const slug = await uniqueSlug(cleanCourseCode, cleanTitle);
-
-  const event = await prisma.submissionEvent.create({
-    data: {
-      slug,
-      title: cleanTitle,
-      courseCode: cleanCourseCode,
-      type: eventType,
-      description: cleanDescription,
-      deadline: parsedDeadline,
-      createdBy: req.user!.id,
-    },
-  });
-
-  res.status(201).json(event);
-}
-
-export async function getEventBySlug(req: Request, res: Response): Promise<void> {
-  const slug = req.params.slug as string;
-  const cacheKey = `event:slug:${slug}`;
-
-  const cached = cacheGet<object>(cacheKey);
-  if (cached) {
-    res.json(cached);
-    return;
-  }
-
-  const event = await prisma.submissionEvent.findUnique({
-    where: { slug },
-    select: {
-      id: true, slug: true, title: true, courseCode: true,
-      type: true, description: true, deadline: true,
-      isClosed: true, isDeleted: true,
-    },
-  });
-
-  if (!event || event.isDeleted) {
-    res.status(404).json({ error: 'Event not found' });
-    return;
-  }
-
-  cacheSet(cacheKey, event, 10_000);
-  res.json(event);
-}
-
-export async function getEventById(req: Request, res: Response): Promise<void> {
-  const id = req.params.id as string;
-
-  const event = await prisma.submissionEvent.findFirst({
-    where: { id, isDeleted: false },
-    include: { _count: { select: { submissions: true } } },
-  });
-
-  if (!event) {
-    res.status(404).json({ error: 'Event not found' });
-    return;
-  }
-
-  if (!canManageEvent(req.user, event)) {
-    res.status(403).json({ error: 'You are not allowed to view this event' });
-    return;
-  }
-
-  const confirmedCount = await prisma.submission.count({
-    where: { eventId: id, isConfirmed: true },
-  });
-
-  res.json({
-    ...event,
-    totalSubmissions: event._count.submissions,
-    confirmedCount,
-    pendingCount: event._count.submissions - confirmedCount,
-  });
-}
-
-export async function toggleClose(req: Request, res: Response): Promise<void> {
-  const id = req.params.id as string;
-
-  // The creator manages their own event; dev can manage all events.
-  const event = await prisma.submissionEvent.findFirst({
-    where: { id, ...manageableByUser(req.user), isDeleted: false },
-  });
-
-  if (!event) {
-    res.status(404).json({ error: 'Event not found or not authorised' });
-    return;
-  }
-
-  const updated = await prisma.submissionEvent.update({
-    where: { id },
-    data: { isClosed: !event.isClosed },
-  });
-
-  cacheDelete(`event:slug:${event.slug}`);
-  res.json(updated);
-}
-
-export async function extendEvent(req: Request, res: Response): Promise<void> {
-  const id = req.params.id as string;
-  const { deadline } = req.body as { deadline?: string };
-
-  if (!deadline) {
-    res.status(400).json({ error: 'deadline is required' });
-    return;
-  }
-
-  const newDeadline = new Date(deadline);
-  if (isNaN(newDeadline.getTime())) {
-    res.status(400).json({ error: 'deadline must be a valid date' });
-    return;
-  }
-
-  if (newDeadline <= new Date()) {
-    res.status(400).json({ error: 'deadline must be in the future' });
-    return;
-  }
-
-  const event = await prisma.submissionEvent.findFirst({
-    where: { id, ...manageableByUser(req.user), isDeleted: false },
-  });
-
-  if (!event) {
-    res.status(404).json({ error: 'Event not found or not authorised' });
-    return;
-  }
-
-  const updated = await prisma.submissionEvent.update({
-    where: { id },
-    data: { deadline: newDeadline, isClosed: false },
-  });
-
-  cacheDelete(`event:slug:${event.slug}`);
-  res.json(updated);
-}
-
-export async function deleteEvent(req: Request, res: Response): Promise<void> {
-  const id = req.params.id as string;
-
-  // The creator manages their own event; dev can manage all events.
-  const event = await prisma.submissionEvent.findFirst({
-    where: { id, ...manageableByUser(req.user), isDeleted: false },
-  });
-
-  if (!event) {
-    res.status(404).json({ error: 'Event not found or not authorised' });
-    return;
-  }
-
-  await prisma.submissionEvent.update({ where: { id }, data: { isDeleted: true } });
-  cacheDelete(`event:slug:${event.slug}`);
-  res.json({ message: 'Event deleted' });
-}
+export const deleteEvent = ok((req) =>
+  submissionEventService.delete(routeParam(req.params.id), req.user)
+);

@@ -1,296 +1,38 @@
-import { Request, Response } from 'express';
-import { Prisma } from '@prisma/client';
-import prisma from '../lib/prisma';
-import { uniquePaymentSlug } from '../utils/slugGenerator';
-import { generateQR } from '../utils/qrGenerator';
+import { paymentEventService } from '../modules/paymentEvents/application/paymentEventService';
+import { created, ok } from '../shared/http/controller';
+import { routeParam } from '../shared/http/param';
 
-function manageableByUser(user: Express.Request['user']) {
-  return user!.role === 'dev' || user!.role === 'fin_sec' ? {} : { createdBy: user!.id };
-}
+export const listPaymentEvents = ok((req) =>
+  paymentEventService.list({
+    page: req.query.page as string | undefined,
+    limit: req.query.limit as string | undefined,
+  })
+);
 
-function canManagePaymentEvent(user: Express.Request['user'], event: { createdBy: string }): boolean {
-  return user!.role === 'dev' || user!.role === 'fin_sec' || event.createdBy === user!.id;
-}
+export const createPaymentEvent = created((req) =>
+  paymentEventService.create({ ...req.body, userId: req.user!.id })
+);
 
-export async function listPaymentEvents(req: Request, res: Response): Promise<void> {
-  const page = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
-  const skip = (page - 1) * limit;
+export const getPaymentEventBySlug = ok((req) =>
+  paymentEventService.getPublicBySlug(routeParam(req.params.slug))
+);
 
-  const [events, total, statusGroups] = await Promise.all([
-    prisma.paymentEvent.findMany({
-      where: { isDeleted: false },
-      orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { receipts: true } } },
-      skip,
-      take: limit,
-    }),
-    prisma.paymentEvent.count({ where: { isDeleted: false } }),
-    prisma.paymentReceipt.groupBy({
-      by: ['eventId', 'status'],
-      _count: { id: true },
-    }),
-  ]);
+export const getPaymentEventById = ok((req) =>
+  paymentEventService.getById(routeParam(req.params.id), req.user)
+);
 
-  // Build a map: eventId → { confirmed, rejected, pending }
-  const statusMap = new Map<string, { confirmed: number; rejected: number; pending: number }>();
-  for (const g of statusGroups) {
-    if (!statusMap.has(g.eventId)) {
-      statusMap.set(g.eventId, { confirmed: 0, rejected: 0, pending: 0 });
-    }
-    const entry = statusMap.get(g.eventId)!;
-    if (g.status === 'confirmed') entry.confirmed = g._count.id;
-    if (g.status === 'rejected') entry.rejected = g._count.id;
-    if (g.status === 'pending') entry.pending = g._count.id;
-  }
+export const updatePaymentEvent = ok((req) =>
+  paymentEventService.update(routeParam(req.params.id), req.body, req.user)
+);
 
-  const eventsWithStats = events.map((event) => {
-    const stats = statusMap.get(event.id) ?? { confirmed: 0, rejected: 0, pending: 0 };
-    return {
-      ...event,
-      totalReceipts: event._count.receipts,
-      confirmedCount: stats.confirmed,
-      rejectedCount: stats.rejected,
-      pendingCount: stats.pending,
-    };
-  });
+export const toggleClosePaymentEvent = ok((req) =>
+  paymentEventService.toggleClose(routeParam(req.params.id), req.user)
+);
 
-  res.json({ events: eventsWithStats, total, page, totalPages: Math.ceil(total / limit) });
-}
+export const extendPaymentEvent = ok((req) =>
+  paymentEventService.extend(routeParam(req.params.id), req.body.deadline, req.user)
+);
 
-export async function createPaymentEvent(req: Request, res: Response): Promise<void> {
-  const { title, description, amount, accountNumber, accountName, bankName, deadline, hasTickets } =
-    req.body as {
-      title?: string;
-      description?: string;
-      amount?: string;
-      accountNumber?: string;
-      accountName?: string;
-      bankName?: string;
-      deadline?: string;
-      hasTickets?: boolean;
-    };
-
-  if (!title || !amount || !accountNumber || !accountName || !bankName || !deadline) {
-    res.status(400).json({
-      error: 'title, amount, accountNumber, accountName, bankName, and deadline are required',
-    });
-    return;
-  }
-
-  const cleanTitle = title.trim();
-  const cleanDescription = description?.trim() || null;
-  const cleanAccountNumber = accountNumber.trim();
-  const cleanAccountName = accountName.trim();
-  const cleanBankName = bankName.trim();
-  const parsedAmount = /^\d+(\.\d{1,2})?$/.test(amount.trim()) ? Number(amount) : NaN;
-  const parsedDeadline = new Date(deadline);
-
-  if (!cleanTitle || cleanTitle.length > 150 || cleanAccountNumber.length > 50 || cleanAccountName.length > 100 || cleanBankName.length > 100) {
-    res.status(400).json({ error: 'payment event fields are invalid or too long' });
-    return;
-  }
-  if (isNaN(parsedAmount) || parsedAmount <= 0) {
-    res.status(400).json({ error: 'amount must be a positive number' });
-    return;
-  }
-  if (Number.isNaN(parsedDeadline.getTime()) || parsedDeadline <= new Date()) {
-    res.status(400).json({ error: 'deadline must be a valid future date' });
-    return;
-  }
-
-  const slug = await uniquePaymentSlug(cleanTitle);
-
-  const event = await prisma.paymentEvent.create({
-    data: {
-      slug,
-      title: cleanTitle,
-      description: cleanDescription,
-      amount: new Prisma.Decimal(parsedAmount),
-      accountNumber: cleanAccountNumber,
-      accountName: cleanAccountName,
-      bankName: cleanBankName,
-      deadline: parsedDeadline,
-      hasTickets: !!hasTickets,
-      createdBy: req.user!.id,
-    },
-  });
-
-  res.status(201).json(event);
-}
-
-export async function getPaymentEventBySlug(req: Request, res: Response): Promise<void> {
-  const slug = req.params.slug as string;
-
-  const event = await prisma.paymentEvent.findUnique({
-    where: { slug },
-    select: {
-      id: true,
-      slug: true,
-      title: true,
-      description: true,
-      amount: true,
-      accountNumber: true,
-      accountName: true,
-      bankName: true,
-      deadline: true,
-      hasTickets: true,
-      isClosed: true,
-      isDeleted: true,
-    },
-  });
-
-  if (!event || event.isDeleted) {
-    res.status(404).json({ error: 'Payment event not found' });
-    return;
-  }
-
-  res.json(event);
-}
-
-export async function getPaymentEventById(req: Request, res: Response): Promise<void> {
-  const id = req.params.id as string;
-
-  const event = await prisma.paymentEvent.findFirst({
-    where: { id, isDeleted: false },
-    include: { _count: { select: { receipts: true } } },
-  });
-
-  if (!event) {
-    res.status(404).json({ error: 'Payment event not found' });
-    return;
-  }
-
-  if (!canManagePaymentEvent(req.user, event)) {
-    res.status(403).json({ error: 'You are not allowed to view this payment event' });
-    return;
-  }
-
-  const [confirmedCount, rejectedCount, pendingCount] = await Promise.all([
-    prisma.paymentReceipt.count({ where: { eventId: id, status: 'confirmed' } }),
-    prisma.paymentReceipt.count({ where: { eventId: id, status: 'rejected' } }),
-    prisma.paymentReceipt.count({ where: { eventId: id, status: 'pending' } }),
-  ]);
-
-  res.json({
-    ...event,
-    totalReceipts: event._count.receipts,
-    confirmedCount,
-    rejectedCount,
-    pendingCount,
-  });
-}
-
-export async function updatePaymentEvent(req: Request, res: Response): Promise<void> {
-  const id = req.params.id as string;
-
-  const event = await prisma.paymentEvent.findFirst({
-    where: { id, ...manageableByUser(req.user), isDeleted: false },
-  });
-
-  if (!event) {
-    res.status(404).json({ error: 'Payment event not found or not authorised' });
-    return;
-  }
-
-  const updates: { hasTickets?: boolean; description?: string | null } = {};
-
-  if (req.body.hasTickets !== undefined) {
-    updates.hasTickets = !!req.body.hasTickets;
-  }
-  if (req.body.description !== undefined) {
-    updates.description = req.body.description?.trim() || null;
-  }
-
-  const updated = await prisma.paymentEvent.update({
-    where: { id },
-    data: updates,
-  });
-
-  // Backfill QR codes for already-confirmed receipts when tickets are first enabled
-  if (!event.hasTickets && updates.hasTickets === true) {
-    const pending = await prisma.paymentReceipt.findMany({
-      where: { eventId: id, status: 'confirmed', ticketQrCode: null },
-      select: { id: true },
-    });
-    for (const r of pending) {
-      const qr = await generateQR(r.id);
-      await prisma.paymentReceipt.update({ where: { id: r.id }, data: { ticketQrCode: qr } });
-    }
-  }
-
-  res.json(updated);
-}
-
-export async function toggleClosePaymentEvent(req: Request, res: Response): Promise<void> {
-  const id = req.params.id as string;
-
-  const event = await prisma.paymentEvent.findFirst({
-    where: { id, ...manageableByUser(req.user), isDeleted: false },
-  });
-
-  if (!event) {
-    res.status(404).json({ error: 'Payment event not found or not authorised' });
-    return;
-  }
-
-  const updated = await prisma.paymentEvent.update({
-    where: { id },
-    data: { isClosed: !event.isClosed },
-  });
-
-  res.json(updated);
-}
-
-export async function extendPaymentEvent(req: Request, res: Response): Promise<void> {
-  const id = req.params.id as string;
-  const { deadline } = req.body as { deadline?: string };
-
-  if (!deadline) {
-    res.status(400).json({ error: 'deadline is required' });
-    return;
-  }
-
-  const newDeadline = new Date(deadline);
-  if (isNaN(newDeadline.getTime())) {
-    res.status(400).json({ error: 'deadline must be a valid date' });
-    return;
-  }
-
-  if (newDeadline <= new Date()) {
-    res.status(400).json({ error: 'deadline must be in the future' });
-    return;
-  }
-
-  const event = await prisma.paymentEvent.findFirst({
-    where: { id, ...manageableByUser(req.user), isDeleted: false },
-  });
-
-  if (!event) {
-    res.status(404).json({ error: 'Payment event not found or not authorised' });
-    return;
-  }
-
-  const updated = await prisma.paymentEvent.update({
-    where: { id },
-    data: { deadline: newDeadline, isClosed: false },
-  });
-
-  res.json(updated);
-}
-
-export async function deletePaymentEvent(req: Request, res: Response): Promise<void> {
-  const id = req.params.id as string;
-
-  const event = await prisma.paymentEvent.findFirst({
-    where: { id, ...manageableByUser(req.user), isDeleted: false },
-  });
-
-  if (!event) {
-    res.status(404).json({ error: 'Payment event not found or not authorised' });
-    return;
-  }
-
-  await prisma.paymentEvent.update({ where: { id }, data: { isDeleted: true } });
-  res.json({ message: 'Payment event deleted' });
-}
+export const deletePaymentEvent = ok((req) =>
+  paymentEventService.delete(routeParam(req.params.id), req.user)
+);
