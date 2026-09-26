@@ -31,11 +31,12 @@ export class SubmissionEventService {
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '') || 20));
     const skip = (page - 1) * limit;
 
-    const [events, total, confirmedGroups] = await Promise.all([
+    const [events, total] = await Promise.all([
       this.repository.findPage({ skip, take: limit }),
       this.repository.countActive(),
-      this.repository.confirmedCountsByEvent(),
     ]);
+
+    const confirmedGroups = await this.repository.confirmedCountsByEvent(events.map((event) => event.id));
 
     const confirmedMap = new Map(confirmedGroups.map((group) => [group.eventId, group._count.id]));
     return {

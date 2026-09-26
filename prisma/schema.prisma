@@ -43,6 +43,10 @@ model SubmissionEvent {
   user        User        @relation(fields: [createdBy], references: [id])
   createdAt   DateTime    @default(now())
   submissions Submission[]
+
+  @@index([isDeleted, createdAt])
+  @@index([createdBy, isDeleted])
+  @@index([deadline])
 }
 
 enum EventType {
@@ -69,6 +73,9 @@ model Submission {
   @@index([eventId, fullName])
   @@index([eventId, matricNumber])
   @@index([eventId, isConfirmed])
+  @@index([eventId, submittedAt])
+  @@index([eventId, isConfirmed, confirmedAt])
+  @@index([matricNumber, submittedAt])
 }
 
 enum PaymentStatus {
@@ -102,6 +109,10 @@ model PaymentEvent {
   creator       User            @relation(fields: [createdBy], references: [id])
   createdAt     DateTime        @default(now())
   receipts      PaymentReceipt[]
+
+  @@index([isDeleted, createdAt])
+  @@index([createdBy, isDeleted])
+  @@index([deadline])
 }
 
 model PaymentReceipt {
@@ -135,6 +146,12 @@ model PaymentReceipt {
   @@index([eventId, status])
   @@index([eventId, isClaimed])
   @@index([eventId, amountCheckStatus])
+  @@index([eventId, submittedAt])
+  @@index([eventId, status, submittedAt])
+  @@index([eventId, status, confirmedAt])
+  @@index([matricNumber, status])
+  @@index([matricNumber, submittedAt])
+  @@index([status, confirmedAt])
 }
 
 enum TransactionType {
@@ -161,4 +178,8 @@ model Transaction {
 
   @@index([occurredAt])
   @@index([isDeleted])
+  @@index([isDeleted, occurredAt, createdAt])
+  @@index([isDeleted, type, occurredAt])
+  @@index([isDeleted, category, occurredAt])
+  @@index([recordedBy])
 }

@@ -16,11 +16,12 @@ export class PaymentEventService {
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '') || 20));
     const skip = (page - 1) * limit;
 
-    const [events, total, statusGroups] = await Promise.all([
+    const [events, total] = await Promise.all([
       this.repository.findPage({ skip, take: limit }),
       this.repository.countActive(),
-      this.repository.receiptStatusCounts(),
     ]);
+
+    const statusGroups = await this.repository.receiptStatusCounts(events.map((event) => event.id));
 
     const statusMap = new Map<string, { confirmed: number; rejected: number; pending: number }>();
     for (const group of statusGroups) {

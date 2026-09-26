@@ -20,10 +20,11 @@ export class SubmissionEventRepository {
     return prisma.submissionEvent.count({ where: { isDeleted: false } });
   }
 
-  confirmedCountsByEvent() {
+  confirmedCountsByEvent(eventIds: string[]) {
+    if (eventIds.length === 0) return Promise.resolve([]);
     return prisma.submission.groupBy({
       by: ['eventId'],
-      where: { isConfirmed: true },
+      where: { eventId: { in: eventIds }, isConfirmed: true },
       _count: { id: true },
     });
   }

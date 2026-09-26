@@ -3,7 +3,10 @@ import prisma from '../../../lib/prisma';
 
 export class SubmissionRepository {
   findEventById(eventId: string) {
-    return prisma.submissionEvent.findUnique({ where: { id: eventId } });
+    return prisma.submissionEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true, createdBy: true, courseCode: true, deadline: true, isClosed: true, isDeleted: true },
+    });
   }
 
   findActiveEventById(eventId: string) {
@@ -35,7 +38,7 @@ export class SubmissionRepository {
   }
 
   findByIdWithEvent(id: string) {
-    return prisma.submission.findUnique({ where: { id }, include: { event: true } });
+    return prisma.submission.findUnique({ where: { id }, include: { event: { select: { createdBy: true } } } });
   }
 
   confirm(id: string, confirmerName: string) {

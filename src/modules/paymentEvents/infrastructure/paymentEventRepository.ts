@@ -16,9 +16,11 @@ export class PaymentEventRepository {
     return prisma.paymentEvent.count({ where: { isDeleted: false } });
   }
 
-  receiptStatusCounts() {
+  receiptStatusCounts(eventIds: string[]) {
+    if (eventIds.length === 0) return Promise.resolve([]);
     return prisma.paymentReceipt.groupBy({
       by: ['eventId', 'status'],
+      where: { eventId: { in: eventIds } },
       _count: { id: true },
     });
   }

@@ -1,9 +1,12 @@
-import { Prisma, PaymentStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import prisma from '../../../lib/prisma';
 
 export class PaymentReceiptRepository {
   findEventById(eventId: string) {
-    return prisma.paymentEvent.findUnique({ where: { id: eventId } });
+    return prisma.paymentEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true, amount: true, deadline: true, hasTickets: true, isClosed: true, isDeleted: true },
+    });
   }
 
   findActiveEventById(eventId: string) {
@@ -35,13 +38,25 @@ export class PaymentReceiptRepository {
   }
 
   findWithEventAndTransaction(id: string) {
-    return prisma.paymentReceipt.findUnique({ where: { id }, include: { event: true, transaction: true } });
+    return prisma.paymentReceipt.findUnique({
+      where: { id },
+      include: {
+        event: { select: { id: true, createdBy: true, hasTickets: true, amount: true, title: true } },
+        transaction: { select: { id: true, isDeleted: true } },
+      },
+    });
   }
 
   confirm(id: string, input: { confirmedBy: string; recordedBy: string; note?: string | null; ticketQrCode?: string }) {
     const now = new Date();
     return prisma.$transaction(async (tx) => {
-      const receipt = await tx.paymentReceipt.findUnique({ where: { id }, include: { event: true, transaction: true } });
+      const receipt = await tx.paymentReceipt.findUnique({
+        where: { id },
+        include: {
+          event: { select: { amount: true, title: true } },
+          transaction: { select: { id: true, isDeleted: true } },
+        },
+      });
       if (!receipt) return null;
 
       const wasConfirmed = receipt.status === 'confirmed';
@@ -81,7 +96,10 @@ export class PaymentReceiptRepository {
   reject(id: string, input: { confirmedBy: string; note?: string | null }) {
     const now = new Date();
     return prisma.$transaction(async (tx) => {
-      const receipt = await tx.paymentReceipt.findUnique({ where: { id }, include: { transaction: true, event: true } });
+      const receipt = await tx.paymentReceipt.findUnique({
+        where: { id },
+        include: { transaction: { select: { id: true, isDeleted: true } }, event: { select: { id: true } } },
+      });
       if (!receipt) return null;
 
       const wasConfirmed = receipt.status === 'confirmed';
@@ -111,11 +129,14 @@ export class PaymentReceiptRepository {
   }
 
   findTicketByShortCode(code: string) {
-    return prisma.paymentReceipt.findFirst({ where: { id: { startsWith: code.toLowerCase() }, event: { hasTickets: true } }, include: { event: true } });
+    return prisma.paymentReceipt.findFirst({
+      where: { id: { startsWith: code.toLowerCase() }, event: { hasTickets: true } },
+      include: { event: { select: { createdBy: true, hasTickets: true } } },
+    });
   }
 
   findTicketById(id: string) {
-    return prisma.paymentReceipt.findUnique({ where: { id }, include: { event: true } });
+    return prisma.paymentReceipt.findUnique({ where: { id }, include: { event: { select: { createdBy: true, hasTickets: true } } } });
   }
 
   claim(id: string, claimedBy: string) {
