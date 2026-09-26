@@ -185,7 +185,7 @@ export async function getLedger(req: Request, res: Response): Promise<void> {
         receipt: { include: { event: { select: { id: true, slug: true, title: true } } } },
       },
     }),
-    computeLedgerTotals({ isDeleted: false }),
+    computeLedgerTotals(where),
   ]);
 
   const serializedTransactions = transactions.map((t) => serializeTransaction(t, { includeRecorderName: true }));
@@ -265,7 +265,7 @@ export async function listTransactionsAdmin(req: Request, res: Response): Promis
         receipt: { include: { event: { select: { id: true, slug: true, title: true } } } },
       },
     }),
-    computeLedgerTotals({ isDeleted: false }),
+    computeLedgerTotals(where),
   ]);
 
   res.json({

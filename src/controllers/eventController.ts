@@ -12,6 +12,10 @@ function manageableByUser(user: Express.Request['user']) {
   return user!.role === 'dev' ? {} : { createdBy: user!.id };
 }
 
+function canManageEvent(user: Express.Request['user'], event: { createdBy: string }): boolean {
+  return user!.role === 'dev' || event.createdBy === user!.id;
+}
+
 export async function listEvents(req: Request, res: Response): Promise<void> {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
@@ -63,16 +67,32 @@ export async function createEvent(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const slug = await uniqueSlug(courseCode, title);
+  const cleanTitle = title.trim();
+  const cleanCourseCode = courseCode.trim().toUpperCase();
+  const cleanDescription = description?.trim() || null;
+  const validTypes: EventType[] = ['assignment', 'attendance', 'lab', 'other'];
+  const eventType = type && validTypes.includes(type) ? type : 'assignment';
+  const parsedDeadline = new Date(deadline);
+
+  if (!cleanTitle || !cleanCourseCode || cleanTitle.length > 150 || cleanCourseCode.length > 30) {
+    res.status(400).json({ error: 'title and courseCode must be valid and reasonably short' });
+    return;
+  }
+  if (Number.isNaN(parsedDeadline.getTime()) || parsedDeadline <= new Date()) {
+    res.status(400).json({ error: 'deadline must be a valid future date' });
+    return;
+  }
+
+  const slug = await uniqueSlug(cleanCourseCode, cleanTitle);
 
   const event = await prisma.submissionEvent.create({
     data: {
       slug,
-      title,
-      courseCode,
-      type: type ?? 'assignment',
-      description,
-      deadline: new Date(deadline),
+      title: cleanTitle,
+      courseCode: cleanCourseCode,
+      type: eventType,
+      description: cleanDescription,
+      deadline: parsedDeadline,
       createdBy: req.user!.id,
     },
   });
@@ -111,7 +131,6 @@ export async function getEventBySlug(req: Request, res: Response): Promise<void>
 export async function getEventById(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
 
-  // Any authenticated user can view any event's detail
   const event = await prisma.submissionEvent.findFirst({
     where: { id, isDeleted: false },
     include: { _count: { select: { submissions: true } } },
@@ -119,6 +138,11 @@ export async function getEventById(req: Request, res: Response): Promise<void> {
 
   if (!event) {
     res.status(404).json({ error: 'Event not found' });
+    return;
+  }
+
+  if (!canManageEvent(req.user, event)) {
+    res.status(403).json({ error: 'You are not allowed to view this event' });
     return;
   }
 

@@ -6,6 +6,10 @@ import { generateQR } from '../utils/qrGenerator';
 import { exportPaymentReceipts } from '../utils/excelExporter';
 import { checkReceiptAmountInBackground } from '../utils/receiptAmountChecker';
 
+function canManagePaymentEvent(user: Express.Request['user'], event: { createdBy: string }): boolean {
+  return user!.role === 'dev' || user!.role === 'fin_sec' || event.createdBy === user!.id;
+}
+
 export async function submitPaymentReceipt(req: Request, res: Response): Promise<void> {
   const { eventId, fullName, matricNumber, level } = req.body as {
     eventId?: string;
@@ -16,6 +20,15 @@ export async function submitPaymentReceipt(req: Request, res: Response): Promise
 
   if (!eventId || !fullName || !matricNumber) {
     res.status(400).json({ error: 'eventId, fullName, and matricNumber are required' });
+    return;
+  }
+
+  const cleanFullName = fullName.trim();
+  const cleanMatricNumber = matricNumber.trim().toUpperCase();
+  const cleanLevel = level?.trim() || null;
+
+  if (!cleanFullName || !cleanMatricNumber || cleanFullName.length > 120 || cleanMatricNumber.length > 50) {
+    res.status(400).json({ error: 'fullName and matricNumber must be valid and reasonably short' });
     return;
   }
 
@@ -36,7 +49,7 @@ export async function submitPaymentReceipt(req: Request, res: Response): Promise
   }
 
   const existing = await prisma.paymentReceipt.findUnique({
-    where: { matricNumber_eventId: { matricNumber: matricNumber.toUpperCase(), eventId } },
+    where: { matricNumber_eventId: { matricNumber: cleanMatricNumber, eventId } },
   });
   if (existing) {
     res.status(409).json({ error: 'You have already submitted a receipt for this payment' });
@@ -54,16 +67,25 @@ export async function submitPaymentReceipt(req: Request, res: Response): Promise
     return;
   }
 
-  const receipt = await prisma.paymentReceipt.create({
-    data: {
-      eventId,
-      fullName: fullName.trim(),
-      matricNumber: matricNumber.trim().toUpperCase(),
-      level: level ?? null,
-      receiptUrl,
-      receiptPublicId,
-    },
-  });
+  let receipt;
+  try {
+    receipt = await prisma.paymentReceipt.create({
+      data: {
+        eventId,
+        fullName: cleanFullName,
+        matricNumber: cleanMatricNumber,
+        level: cleanLevel,
+        receiptUrl,
+        receiptPublicId,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      res.status(409).json({ error: 'You have already submitted a receipt for this payment' });
+      return;
+    }
+    throw error;
+  }
 
   let responseReceipt = receipt;
   if (event.hasTickets && !receipt.ticketQrCode) {
@@ -94,6 +116,10 @@ export async function getPaymentReceipts(req: Request, res: Response): Promise<v
   const event = await prisma.paymentEvent.findFirst({ where: { id: eventId, isDeleted: false } });
   if (!event) {
     res.status(404).json({ error: 'Payment event not found' });
+    return;
+  }
+  if (!canManagePaymentEvent(req.user, event)) {
+    res.status(403).json({ error: 'You are not allowed to view receipts for this payment event' });
     return;
   }
 
@@ -153,6 +179,10 @@ export async function exportPaymentReceiptsToExcel(req: Request, res: Response):
     res.status(404).json({ error: 'Payment event not found' });
     return;
   }
+  if (!canManagePaymentEvent(req.user, event)) {
+    res.status(403).json({ error: 'You are not allowed to export receipts for this payment event' });
+    return;
+  }
 
   const receipts = await prisma.paymentReceipt.findMany({
     where: { eventId },
@@ -179,6 +209,10 @@ export async function confirmPaymentReceipt(req: Request, res: Response): Promis
   });
   if (!receipt) {
     res.status(404).json({ error: 'Receipt not found' });
+    return;
+  }
+  if (!canManagePaymentEvent(req.user, receipt.event)) {
+    res.status(403).json({ error: 'You are not allowed to confirm this receipt' });
     return;
   }
 
@@ -235,10 +269,14 @@ export async function rejectPaymentReceipt(req: Request, res: Response): Promise
 
   const receipt = await prisma.paymentReceipt.findUnique({
     where: { id },
-    include: { transaction: true },
+    include: { transaction: true, event: true },
   });
   if (!receipt) {
     res.status(404).json({ error: 'Receipt not found' });
+    return;
+  }
+  if (!canManagePaymentEvent(req.user, receipt.event)) {
+    res.status(403).json({ error: 'You are not allowed to reject this receipt' });
     return;
   }
 
@@ -411,15 +449,36 @@ export async function claimPaymentReceipt(req: Request, res: Response): Promise<
     return;
   }
 
+  if (!canManagePaymentEvent(req.user, receipt.event)) {
+    res.status(403).json({ error: 'You are not allowed to claim this ticket' });
+    return;
+  }
+
   const now = new Date();
-  const updated = await prisma.paymentReceipt.update({
-    where: { id: receipt.id },
+  const claimResult = await prisma.paymentReceipt.updateMany({
+    where: { id: receipt.id, isClaimed: false },
     data: {
       isClaimed: true,
       claimedAt: now,
       claimedBy: req.user!.name,
     },
   });
+
+  if (claimResult.count === 0) {
+    const current = await prisma.paymentReceipt.findUnique({ where: { id: receipt.id } });
+    res.json({
+      alreadyClaimed: true,
+      receipt: {
+        fullName: current?.fullName ?? receipt.fullName,
+        matricNumber: current?.matricNumber ?? receipt.matricNumber,
+        claimedBy: current?.claimedBy ?? receipt.claimedBy,
+        claimedAt: current?.claimedAt ?? receipt.claimedAt,
+      },
+    });
+    return;
+  }
+
+  const updated = await prisma.paymentReceipt.findUniqueOrThrow({ where: { id: receipt.id } });
 
   res.json({
     alreadyClaimed: false,

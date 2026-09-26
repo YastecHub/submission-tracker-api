@@ -9,8 +9,10 @@ import {
   getSubmissionStatus,
 } from '../controllers/submissionController';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { requireRole } from '../middleware/requireRole';
 
 const router = Router();
+const submissionRoles = requireRole('cr', 'acr', 'dev');
 
 /**
  * @openapi
@@ -71,7 +73,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/scan', authMiddleware, scanConfirm);
+router.post('/scan', authMiddleware, submissionRoles, scanConfirm);
 
 /**
  * @openapi
@@ -185,8 +187,8 @@ router.get('/status/:id', getSubmissionStatus);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:eventId/export', authMiddleware, exportToExcel);
-router.patch('/:eventId/confirm-all', authMiddleware, confirmAllSubmissions);
+router.get('/:eventId/export', authMiddleware, submissionRoles, exportToExcel);
+router.patch('/:eventId/confirm-all', authMiddleware, submissionRoles, confirmAllSubmissions);
 
 /**
  * @openapi
@@ -225,7 +227,7 @@ router.patch('/:eventId/confirm-all', authMiddleware, confirmAllSubmissions);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:eventId', authMiddleware, getSubmissions);
+router.get('/:eventId', authMiddleware, submissionRoles, getSubmissions);
 
 /**
  * @openapi
@@ -264,6 +266,6 @@ router.get('/:eventId', authMiddleware, getSubmissions);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.patch('/:id/confirm', authMiddleware, confirmSubmission);
+router.patch('/:id/confirm', authMiddleware, submissionRoles, confirmSubmission);
 
 export default router;

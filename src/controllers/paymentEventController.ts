@@ -5,7 +5,11 @@ import { uniquePaymentSlug } from '../utils/slugGenerator';
 import { generateQR } from '../utils/qrGenerator';
 
 function manageableByUser(user: Express.Request['user']) {
-  return user!.role === 'dev' ? {} : { createdBy: user!.id };
+  return user!.role === 'dev' || user!.role === 'fin_sec' ? {} : { createdBy: user!.id };
+}
+
+function canManagePaymentEvent(user: Express.Request['user'], event: { createdBy: string }): boolean {
+  return user!.role === 'dev' || user!.role === 'fin_sec' || event.createdBy === user!.id;
 }
 
 export async function listPaymentEvents(req: Request, res: Response): Promise<void> {
@@ -74,24 +78,39 @@ export async function createPaymentEvent(req: Request, res: Response): Promise<v
     return;
   }
 
-  const parsedAmount = parseFloat(amount);
+  const cleanTitle = title.trim();
+  const cleanDescription = description?.trim() || null;
+  const cleanAccountNumber = accountNumber.trim();
+  const cleanAccountName = accountName.trim();
+  const cleanBankName = bankName.trim();
+  const parsedAmount = /^\d+(\.\d{1,2})?$/.test(amount.trim()) ? Number(amount) : NaN;
+  const parsedDeadline = new Date(deadline);
+
+  if (!cleanTitle || cleanTitle.length > 150 || cleanAccountNumber.length > 50 || cleanAccountName.length > 100 || cleanBankName.length > 100) {
+    res.status(400).json({ error: 'payment event fields are invalid or too long' });
+    return;
+  }
   if (isNaN(parsedAmount) || parsedAmount <= 0) {
     res.status(400).json({ error: 'amount must be a positive number' });
     return;
   }
+  if (Number.isNaN(parsedDeadline.getTime()) || parsedDeadline <= new Date()) {
+    res.status(400).json({ error: 'deadline must be a valid future date' });
+    return;
+  }
 
-  const slug = await uniquePaymentSlug(title);
+  const slug = await uniquePaymentSlug(cleanTitle);
 
   const event = await prisma.paymentEvent.create({
     data: {
       slug,
-      title,
-      description: description ?? null,
+      title: cleanTitle,
+      description: cleanDescription,
       amount: new Prisma.Decimal(parsedAmount),
-      accountNumber,
-      accountName,
-      bankName,
-      deadline: new Date(deadline),
+      accountNumber: cleanAccountNumber,
+      accountName: cleanAccountName,
+      bankName: cleanBankName,
+      deadline: parsedDeadline,
       hasTickets: !!hasTickets,
       createdBy: req.user!.id,
     },
@@ -142,6 +161,11 @@ export async function getPaymentEventById(req: Request, res: Response): Promise<
     return;
   }
 
+  if (!canManagePaymentEvent(req.user, event)) {
+    res.status(403).json({ error: 'You are not allowed to view this payment event' });
+    return;
+  }
+
   const [confirmedCount, rejectedCount, pendingCount] = await Promise.all([
     prisma.paymentReceipt.count({ where: { eventId: id, status: 'confirmed' } }),
     prisma.paymentReceipt.count({ where: { eventId: id, status: 'rejected' } }),
@@ -161,11 +185,11 @@ export async function updatePaymentEvent(req: Request, res: Response): Promise<v
   const id = req.params.id as string;
 
   const event = await prisma.paymentEvent.findFirst({
-    where: { id, isDeleted: false },
+    where: { id, ...manageableByUser(req.user), isDeleted: false },
   });
 
   if (!event) {
-    res.status(404).json({ error: 'Payment event not found' });
+    res.status(404).json({ error: 'Payment event not found or not authorised' });
     return;
   }
 
@@ -239,11 +263,11 @@ export async function extendPaymentEvent(req: Request, res: Response): Promise<v
   }
 
   const event = await prisma.paymentEvent.findFirst({
-    where: { id, isDeleted: false },
+    where: { id, ...manageableByUser(req.user), isDeleted: false },
   });
 
   if (!event) {
-    res.status(404).json({ error: 'Payment event not found' });
+    res.status(404).json({ error: 'Payment event not found or not authorised' });
     return;
   }
 

@@ -37,11 +37,11 @@ router.get('/transparency/ledger', getLedger);
 router.post('/transparency/verify-matric', verifyMatric);
 
 // Admin — list/create/edit/delete transactions
-const writeRoles = requireRole('cr', 'acr', 'fin_sec', 'dev');
+const financeRoles = requireRole('fin_sec', 'dev');
 
-router.get('/transactions', authMiddleware, listTransactionsAdmin);
-router.post('/transactions', authMiddleware, writeRoles, handleProofUpload, createTransaction);
-router.patch('/transactions/:id', authMiddleware, writeRoles, handleProofUpload, updateTransaction);
-router.delete('/transactions/:id', authMiddleware, writeRoles, deleteTransaction);
+router.get('/transactions', authMiddleware, financeRoles, listTransactionsAdmin);
+router.post('/transactions', authMiddleware, financeRoles, handleProofUpload, createTransaction);
+router.patch('/transactions/:id', authMiddleware, financeRoles, handleProofUpload, updateTransaction);
+router.delete('/transactions/:id', authMiddleware, financeRoles, deleteTransaction);
 
 export default router;

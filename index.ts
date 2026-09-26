@@ -19,12 +19,33 @@ import transactionRoutes from './src/routes/transactions';
 
 const app = express();
 
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET must be set to a strong secret of at least 32 characters');
+}
+
 // Render forwards the original client IP through one trusted proxy.
 app.set('trust proxy', 1);
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL ?? '*',
+    origin(origin, callback) {
+      const configuredOrigins = (process.env.CLIENT_URL ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const allowedOrigins = configuredOrigins.length
+        ? configuredOrigins
+        : process.env.NODE_ENV === 'production'
+          ? []
+          : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     exposedHeaders: ['Content-Disposition'],
   })
@@ -45,6 +66,16 @@ const apiLimiter = rateLimit({
 });
 
 app.use('/api', apiLimiter);
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again later.' },
+});
+
+app.use('/api/auth/login', loginLimiter);
 
 // Swagger UI — available at /api/docs
 app.use(

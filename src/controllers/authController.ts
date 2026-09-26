@@ -71,9 +71,11 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  if (email) {
+  const normalizedEmail = email?.trim().toLowerCase();
+
+  if (normalizedEmail) {
     const taken = await prisma.user.findFirst({
-      where: { email, NOT: { id: req.user!.id } },
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' }, NOT: { id: req.user!.id } },
     });
     if (taken) {
       res.status(409).json({ error: 'Email already in use by another account' });
@@ -85,7 +87,7 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
     where: { id: req.user!.id },
     data: {
       ...(name ? { name } : {}),
-      ...(email ? { email } : {}),
+      ...(normalizedEmail ? { email: normalizedEmail } : {}),
     },
     select: { id: true, email: true, name: true, role: true },
   });
@@ -153,12 +155,21 @@ export async function createUser(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  if (role === 'dev' && callerRole !== 'dev') {
+    res.status(403).json({ error: 'Only dev users can create dev accounts' });
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
   if (password.length < 8) {
     res.status(400).json({ error: 'Password must be at least 8 characters' });
     return;
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+  });
   if (existing) {
     res.status(409).json({ error: 'An account with this email already exists' });
     return;
@@ -166,7 +177,7 @@ export async function createUser(req: Request, res: Response): Promise<void> {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { name, email, passwordHash, role: role as UserRole },
+    data: { name: name.trim(), email: normalizedEmail, passwordHash, role: role as UserRole },
     select: { id: true, email: true, name: true, role: true, createdAt: true },
   });
 

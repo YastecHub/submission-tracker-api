@@ -7,6 +7,10 @@ import { sendPush } from '../utils/pushNotifier';
 
 const CONFIRM_ALL_MIN_SUBMISSIONS = 90;
 
+function canManageSubmissionEvent(user: Express.Request['user'], event: { createdBy: string }): boolean {
+  return user!.role === 'dev' || event.createdBy === user!.id;
+}
+
 export async function createSubmission(req: Request, res: Response): Promise<void> {
   const { eventId, fullName, matricNumber, level } = req.body as {
     eventId?: string;
@@ -17,6 +21,15 @@ export async function createSubmission(req: Request, res: Response): Promise<voi
 
   if (!eventId || !fullName || !matricNumber) {
     res.status(400).json({ error: 'eventId, fullName, and matricNumber are required' });
+    return;
+  }
+
+  const cleanFullName = fullName.trim();
+  const cleanMatricNumber = matricNumber.trim().toUpperCase();
+  const cleanLevel = level?.trim() || null;
+
+  if (!cleanFullName || !cleanMatricNumber || cleanFullName.length > 120 || cleanMatricNumber.length > 50) {
+    res.status(400).json({ error: 'fullName and matricNumber must be valid and reasonably short' });
     return;
   }
 
@@ -32,16 +45,25 @@ export async function createSubmission(req: Request, res: Response): Promise<voi
   }
 
   const existing = await prisma.submission.findUnique({
-    where: { matricNumber_eventId: { matricNumber, eventId } },
+    where: { matricNumber_eventId: { matricNumber: cleanMatricNumber, eventId } },
   });
   if (existing) {
     res.status(409).json({ error: 'You have already submitted for this event' });
     return;
   }
 
-  const submission = await prisma.submission.create({
-    data: { eventId, fullName, matricNumber, level: level ?? null, qrCode: 'pending' },
-  });
+  let submission;
+  try {
+    submission = await prisma.submission.create({
+      data: { eventId, fullName: cleanFullName, matricNumber: cleanMatricNumber, level: cleanLevel, qrCode: 'pending' },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      res.status(409).json({ error: 'You have already submitted for this event' });
+      return;
+    }
+    throw error;
+  }
 
   const qrCode = await generateQR(submission.id);
 
@@ -61,7 +83,7 @@ export async function createSubmission(req: Request, res: Response): Promise<voi
     if (creator?.pushSubscription) {
       await sendPush(creator.pushSubscription, {
         title: `New submission – ${event.courseCode}`,
-        body: `${fullName} (${matricNumber}) just submitted`,
+        body: `${cleanFullName} (${cleanMatricNumber}) just submitted`,
         url: `/dashboard`,
       });
     }
@@ -82,6 +104,10 @@ export async function getSubmissions(req: Request, res: Response): Promise<void>
   });
   if (!event) {
     res.status(404).json({ error: 'Event not found' });
+    return;
+  }
+  if (!canManageSubmissionEvent(req.user, event)) {
+    res.status(403).json({ error: 'You are not allowed to view submissions for this event' });
     return;
   }
 
@@ -123,10 +149,15 @@ export async function getSubmissions(req: Request, res: Response): Promise<void>
 
 export async function confirmSubmission(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
-  const submission = await prisma.submission.findUnique({ where: { id } });
+  const submission = await prisma.submission.findUnique({ where: { id }, include: { event: true } });
 
   if (!submission) {
     res.status(404).json({ error: 'Submission not found' });
+    return;
+  }
+
+  if (!canManageSubmissionEvent(req.user, submission.event)) {
+    res.status(403).json({ error: 'You are not allowed to confirm this submission' });
     return;
   }
 
@@ -146,9 +177,14 @@ export async function scanConfirm(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const submission = await prisma.submission.findUnique({ where: { id: submissionId } });
+  const submission = await prisma.submission.findUnique({ where: { id: submissionId }, include: { event: true } });
   if (!submission) {
     res.status(404).json({ error: 'Submission not found' });
+    return;
+  }
+
+  if (!canManageSubmissionEvent(req.user, submission.event)) {
+    res.status(403).json({ error: 'You are not allowed to confirm this submission' });
     return;
   }
 
@@ -177,6 +213,11 @@ export async function confirmAllSubmissions(req: Request, res: Response): Promis
   });
   if (!event) {
     res.status(404).json({ error: 'Event not found' });
+    return;
+  }
+
+  if (!canManageSubmissionEvent(req.user, event)) {
+    res.status(403).json({ error: 'You are not allowed to confirm submissions for this event' });
     return;
   }
 
@@ -230,6 +271,11 @@ export async function exportToExcel(req: Request, res: Response): Promise<void> 
 
   if (!event) {
     res.status(404).json({ error: 'Event not found' });
+    return;
+  }
+
+  if (!canManageSubmissionEvent(req.user, event)) {
+    res.status(403).json({ error: 'You are not allowed to export submissions for this event' });
     return;
   }
 

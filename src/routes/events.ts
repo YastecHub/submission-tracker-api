@@ -9,8 +9,10 @@ import {
   deleteEvent,
 } from '../controllers/eventController';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { requireRole } from '../middleware/requireRole';
 
 const router = Router();
+const submissionRoles = requireRole('cr', 'acr', 'dev');
 
 /**
  * @openapi
@@ -43,7 +45,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', authMiddleware, listEvents);
+router.get('/', authMiddleware, submissionRoles, listEvents);
 
 /**
  * @openapi
@@ -99,7 +101,7 @@ router.get('/', authMiddleware, listEvents);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/', authMiddleware, createEvent);
+router.post('/', authMiddleware, submissionRoles, createEvent);
 
 /**
  * @openapi
@@ -137,7 +139,7 @@ router.post('/', authMiddleware, createEvent);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/id/:id', authMiddleware, getEventById);
+router.get('/id/:id', authMiddleware, submissionRoles, getEventById);
 
 /**
  * @openapi
@@ -206,7 +208,7 @@ router.get('/:slug', getEventBySlug);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.patch('/:id/close', authMiddleware, toggleClose);
+router.patch('/:id/close', authMiddleware, submissionRoles, toggleClose);
 
 /**
  * @openapi
@@ -243,7 +245,7 @@ router.patch('/:id/close', authMiddleware, toggleClose);
  *       404:
  *         description: Event not found
  */
-router.patch('/:id/extend', authMiddleware, extendEvent);
+router.patch('/:id/extend', authMiddleware, submissionRoles, extendEvent);
 
 /**
  * @openapi
@@ -285,6 +287,6 @@ router.patch('/:id/extend', authMiddleware, extendEvent);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete('/:id', authMiddleware, deleteEvent);
+router.delete('/:id', authMiddleware, submissionRoles, deleteEvent);
 
 export default router;

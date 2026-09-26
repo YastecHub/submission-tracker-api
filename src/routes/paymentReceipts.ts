@@ -11,9 +11,11 @@ import {
   exportPaymentReceiptsToExcel,
 } from '../controllers/paymentReceiptController';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { requireRole } from '../middleware/requireRole';
 import upload from '../middleware/uploadMiddleware';
 
 const router = Router();
+const paymentRoles = requireRole('cr', 'fin_sec', 'dev');
 
 // Wrap multer so its errors return clean JSON instead of a raw 500
 function handleUpload(req: Request, res: Response, next: NextFunction): void {
@@ -44,10 +46,10 @@ router.get('/status/:id', getPaymentReceiptStatus);
 router.get('/my-tickets', getMyTickets);
 
 // Protected — admin routes
-router.post('/scan', authMiddleware, claimPaymentReceipt);
-router.get('/:eventId/export', authMiddleware, exportPaymentReceiptsToExcel);
-router.get('/:eventId', authMiddleware, getPaymentReceipts);
-router.patch('/:id/confirm', authMiddleware, confirmPaymentReceipt);
-router.patch('/:id/reject', authMiddleware, rejectPaymentReceipt);
+router.post('/scan', authMiddleware, paymentRoles, claimPaymentReceipt);
+router.get('/:eventId/export', authMiddleware, paymentRoles, exportPaymentReceiptsToExcel);
+router.get('/:eventId', authMiddleware, paymentRoles, getPaymentReceipts);
+router.patch('/:id/confirm', authMiddleware, paymentRoles, confirmPaymentReceipt);
+router.patch('/:id/reject', authMiddleware, paymentRoles, rejectPaymentReceipt);
 
 export default router;
