@@ -11,11 +11,31 @@ jobs:
     steps:
       - name: Ping health endpoint
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          BASE_URL="${{ secrets.RENDER_API_URL }}"
+          BASE_URL="${BASE_URL%/}"
+
+          STATUS=$(curl -s -o /tmp/warmup-response.txt -w "%{http_code}" \
             -H "x-warmup-token: ${{ secrets.WARMUP_TOKEN }}" \
-            ${{ secrets.RENDER_API_URL }}/api/warmup)
-          echo "Response status: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "Warning: warmup check returned $STATUS"
+            "$BASE_URL/api/warmup")
+
+          echo "Warmup response status: $STATUS"
+
+          if [ "$STATUS" = "200" ]; then
+            exit 0
+          fi
+
+          echo "Warmup endpoint did not return 200. Response preview:"
+          head -c 500 /tmp/warmup-response.txt || true
+          echo ""
+          echo "Checking basic health endpoint as fallback..."
+
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/health")
+          echo "Health response status: $HEALTH_STATUS"
+
+          if [ "$HEALTH_STATUS" != "200" ]; then
+            echo "Warning: both warmup and health checks failed"
             exit 1
           fi
+
+          echo "Health endpoint is up, but /api/warmup failed. Ensure the latest backend is deployed and WARMUP_TOKEN matches in GitHub and Render."
+          exit 1
