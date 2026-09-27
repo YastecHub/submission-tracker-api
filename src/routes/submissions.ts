@@ -195,7 +195,7 @@ router.patch('/:eventId/confirm-all', authMiddleware, submissionRoles, confirmAl
  * /api/submissions/{eventId}:
  *   get:
  *     tags: [Submissions]
- *     summary: Get all submissions for an event
+ *     summary: List submissions for an event
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -205,15 +205,48 @@ router.patch('/:eventId/confirm-all', authMiddleware, submissionRoles, confirmAl
  *         schema:
  *           type: string
  *           format: uuid
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 50
+ *       - in: query
+ *         name: search
+ *         description: Searches fullName and matricNumber when at least 2 characters
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: List of submissions ordered newest first
+ *         description: Paginated submissions ordered newest first
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Submission'
+ *               type: object
+ *               properties:
+ *                 submissions:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Submission'
+ *                 total:
+ *                   type: integer
+ *                 confirmedTotal:
+ *                   type: integer
+ *                 pendingTotal:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
  *       401:
  *         description: Unauthorized
  *         content:

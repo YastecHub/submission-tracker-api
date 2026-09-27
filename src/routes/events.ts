@@ -26,18 +26,41 @@ const submissionRoles = requireRole('cr', 'acr', 'dev');
  * /api/events:
  *   get:
  *     tags: [Events]
- *     summary: List all events for the authenticated CR
+ *     summary: List submission events
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *           default: 20
  *     responses:
  *       200:
- *         description: Array of submission events with stats
+ *         description: Paginated submission events with stats
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/SubmissionEvent'
+ *               type: object
+ *               properties:
+ *                 events:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/SubmissionEvent'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
  *       401:
  *         description: Unauthorized
  *         content:
