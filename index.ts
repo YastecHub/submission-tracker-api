@@ -104,6 +104,18 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/api/warmup', async (req: Request, res: Response) => {
+  const warmupToken = process.env.WARMUP_TOKEN;
+  if (warmupToken && req.get('x-warmup-token') !== warmupToken) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+
+  const startedAt = Date.now();
+  await prisma.$queryRaw`SELECT 1`;
+  res.json({ status: 'warm', db: 'ok', elapsedMs: Date.now() - startedAt });
+});
+
 // Global error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err.stack);

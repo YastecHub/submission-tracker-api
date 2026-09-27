@@ -16,7 +16,9 @@ export class AuthService {
     if (!input.email || !input.password) throw badRequest('Email and password required');
 
     const email = input.email.trim().toLowerCase();
-    const user = await this.users.findByEmailInsensitive(email);
+    const user =
+      (await this.users.findLoginUserByEmail(email)) ??
+      (await this.users.findLoginUserByEmailInsensitive(email));
     if (!user) throw new AppError(401, 'Invalid credentials');
 
     const valid = await bcrypt.compare(input.password, user.passwordHash);

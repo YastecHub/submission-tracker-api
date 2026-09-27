@@ -2,6 +2,34 @@ import { UserRole } from '@prisma/client';
 import prisma from '../../../lib/prisma';
 
 export class UserRepository {
+  findLoginUserByEmail(email: string) {
+    return prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        passwordHash: true,
+        hasLoggedInBefore: true,
+      },
+    });
+  }
+
+  findLoginUserByEmailInsensitive(email: string) {
+    return prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        passwordHash: true,
+        hasLoggedInBefore: true,
+      },
+    });
+  }
+
   findByEmailInsensitive(email: string) {
     return prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
   }
