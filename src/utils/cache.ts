@@ -22,3 +22,9 @@ export function cacheSet<T>(key: string, value: T, ttlMs: number): void {
 export function cacheDelete(key: string): void {
   store.delete(key);
 }
+
+export function cacheDeletePrefix(prefix: string): void {
+  for (const key of store.keys()) {
+    if (key.startsWith(prefix)) store.delete(key);
+  }
+}

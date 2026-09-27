@@ -6,6 +6,7 @@ import { AppError, badRequest, forbidden, notFound } from '../../../shared/error
 import { submissionRepository, SubmissionRepository } from '../infrastructure/submissionRepository';
 
 const CONFIRM_ALL_MIN_SUBMISSIONS = 90;
+const MAX_EXPORT_ROWS = 10_000;
 
 function canManage(user: Express.Request['user'], event: { createdBy: string }): boolean {
   return user!.role === 'dev' || event.createdBy === user!.id;
@@ -116,6 +117,8 @@ export class SubmissionService {
     const event = await this.repository.findActiveEventById(eventId);
     if (!event) throw notFound('Event not found');
     if (!canManage(user, event)) throw forbidden('You are not allowed to export submissions for this event');
+    const total = await this.repository.count({ eventId, isConfirmed: true });
+    if (total > MAX_EXPORT_ROWS) throw badRequest(`Export is limited to ${MAX_EXPORT_ROWS} rows. Use filters or contact support.`);
     const submissions = await this.repository.findConfirmedForExport(eventId);
     return exportSubmissions(submissions, event);
   }

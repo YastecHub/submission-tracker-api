@@ -5,6 +5,9 @@ import { exportPaymentReceipts } from '../../../utils/excelExporter';
 import { checkReceiptAmountInBackground } from '../../../utils/receiptAmountChecker';
 import { AppError, badRequest, forbidden, notFound } from '../../../shared/errors/AppError';
 import { paymentReceiptRepository, PaymentReceiptRepository } from '../infrastructure/paymentReceiptRepository';
+import { cacheDeletePrefix } from '../../../utils/cache';
+
+const MAX_EXPORT_ROWS = 10_000;
 
 function canManage(user: Express.Request['user'], event: { createdBy: string }): boolean {
   return user!.role === 'dev' || user!.role === 'fin_sec' || event.createdBy === user!.id;
@@ -89,6 +92,8 @@ export class PaymentReceiptService {
     const event = await this.repository.findActiveEventById(eventId);
     if (!event) throw notFound('Payment event not found');
     if (!canManage(user, event)) throw forbidden('You are not allowed to export receipts for this payment event');
+    const total = await this.repository.count({ eventId });
+    if (total > MAX_EXPORT_ROWS) throw badRequest(`Export is limited to ${MAX_EXPORT_ROWS} rows. Use filters or contact support.`);
     return exportPaymentReceipts(await this.repository.findForExport(eventId), event);
   }
 
@@ -97,14 +102,18 @@ export class PaymentReceiptService {
     if (!receipt) throw notFound('Receipt not found');
     if (!canManage(user, receipt.event)) throw forbidden('You are not allowed to confirm this receipt');
     const ticketQrCode = receipt.event.hasTickets && !receipt.ticketQrCode ? await generateQR(receipt.id) : undefined;
-    return this.repository.confirm(id, { confirmedBy: user!.name, recordedBy: user!.id, note: input.note, ticketQrCode });
+    const updated = await this.repository.confirm(id, { confirmedBy: user!.name, recordedBy: user!.id, note: input.note, ticketQrCode });
+    cacheDeletePrefix('ledger:');
+    return updated;
   }
 
   async reject(id: string, input: { note?: string }, user: Express.Request['user']) {
     const receipt = await this.repository.findWithEventAndTransaction(id);
     if (!receipt) throw notFound('Receipt not found');
     if (!canManage(user, receipt.event)) throw forbidden('You are not allowed to reject this receipt');
-    return this.repository.reject(id, { confirmedBy: user!.name, note: input.note });
+    const updated = await this.repository.reject(id, { confirmedBy: user!.name, note: input.note });
+    cacheDeletePrefix('ledger:');
+    return updated;
   }
 
   async status(id: string) {

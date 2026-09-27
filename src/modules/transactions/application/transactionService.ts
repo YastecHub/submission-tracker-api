@@ -2,6 +2,7 @@ import { Prisma, TransactionType } from '@prisma/client';
 import { uploadImageBuffer, destroyImage } from '../../../lib/cloudinary';
 import { AppError, badRequest, notFound } from '../../../shared/errors/AppError';
 import { transactionRepository, TransactionRepository, TransactionWithRelations } from '../infrastructure/transactionRepository';
+import { cacheDeletePrefix, cacheGet, cacheSet } from '../../../utils/cache';
 
 const AMOUNT_MAX = 10_000_000_000;
 
@@ -126,10 +127,15 @@ export class TransactionService {
     const limit = Math.min(100, Math.max(1, parseInt(query.limit ?? '') || 50));
     const typeFilter = parseType(query.type);
     const category = (query.category ?? '').trim();
+    const cacheKey = `ledger:${page}:${limit}:${typeFilter ?? 'all'}:${category.toLowerCase()}`;
+    const cached = cacheGet<unknown>(cacheKey);
+    if (cached) return cached;
     const where: Prisma.TransactionWhereInput = { isDeleted: false, ...(typeFilter ? { type: typeFilter } : {}), ...(category ? { category: { equals: category, mode: Prisma.QueryMode.insensitive } } : {}) };
     const [transactions, totals] = await Promise.all([this.repository.findPage(where, (page - 1) * limit, limit), this.totals(where)]);
     const serializedTransactions = transactions.map((t) => serializeTransaction(t, { includeRecorderName: true }));
-    return { ...totals, transactions: serializedTransactions, ...groupTransactionsByPaymentEvent(serializedTransactions), page, limit, totalPages: Math.ceil(totals.transactionCount / limit) };
+    const result = { ...totals, transactions: serializedTransactions, ...groupTransactionsByPaymentEvent(serializedTransactions), page, limit, totalPages: Math.ceil(totals.transactionCount / limit) };
+    cacheSet(cacheKey, result, 10_000);
+    return result;
   }
 
   async verifyMatric(matricNumberInput?: string) {
@@ -169,6 +175,7 @@ export class TransactionService {
 
     const proof = await this.uploadProof(file);
     const created = await this.repository.create({ type: parsedType, amount: parsedAmount, description: description.trim(), category: category?.trim() || null, occurredAt: parsedOccurredAt, proofUrl: proof.proofUrl, proofPublicId: proof.proofPublicId, recordedBy: userId });
+    cacheDeletePrefix('ledger:');
     return serializeTransaction(created, { includeRecordedBy: true, includeRecorderName: true });
   }
 
@@ -212,7 +219,9 @@ export class TransactionService {
       updates.proofUrl = null;
       updates.proofPublicId = null;
     }
-    return serializeTransaction(await this.repository.update(id, updates), { includeRecordedBy: true, includeRecorderName: true });
+    const updated = await this.repository.update(id, updates);
+    cacheDeletePrefix('ledger:');
+    return serializeTransaction(updated, { includeRecordedBy: true, includeRecorderName: true });
   }
 
   async delete(id: string) {
@@ -220,6 +229,7 @@ export class TransactionService {
     if (!existing) throw notFound('Transaction not found');
     if (existing.receiptId) throw new AppError(409, 'Auto-created transactions cannot be deleted directly. Reject the underlying payment receipt instead.');
     await this.repository.softDelete(id);
+    cacheDeletePrefix('ledger:');
     return { ok: true };
   }
 
