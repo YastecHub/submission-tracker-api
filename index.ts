@@ -26,25 +26,48 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 // Render forwards the original client IP through one trusted proxy.
 app.set('trust proxy', 1);
 
+function getAllowedOrigins(): string[] {
+  const configured = [process.env.CLIENT_URL, process.env.CORS_ORIGINS]
+    .filter(Boolean)
+    .flatMap((value) => value!.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const defaults =
+    process.env.NODE_ENV === 'production'
+      ? ['https://nexium31.vercel.app']
+      : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
+  return Array.from(new Set([...configured, ...defaults]));
+}
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  if (getAllowedOrigins().includes(origin)) return true;
+
+  // Optional for Vercel preview deployments. Keep disabled unless needed.
+  if (process.env.ALLOW_VERCEL_PREVIEWS === 'true') {
+    try {
+      const { hostname, protocol } = new URL(origin);
+      return protocol === 'https:' && hostname.endsWith('.vercel.app');
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 app.use(
   cors({
     origin(origin, callback) {
-      const configuredOrigins = (process.env.CLIENT_URL ?? '')
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean);
-      const allowedOrigins = configuredOrigins.length
-        ? configuredOrigins
-        : process.env.NODE_ENV === 'production'
-          ? []
-          : ['http://localhost:5173', 'http://127.0.0.1:5173'];
-
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
 
-      callback(new Error('Not allowed by CORS'));
+      console.warn(`[cors] blocked origin: ${origin}`);
+      callback(null, false);
     },
     credentials: true,
     exposedHeaders: ['Content-Disposition'],
@@ -60,6 +83,7 @@ app.use(express.json());
 const apiLimiter = rateLimit({
   windowMs: 60_000,
   max: 200,
+  skip: (req) => req.method === 'OPTIONS',
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
@@ -70,6 +94,7 @@ app.use('/api', apiLimiter);
 const loginLimiter = rateLimit({
   windowMs: 15 * 60_000,
   max: 10,
+  skip: (req) => req.method === 'OPTIONS',
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many login attempts, please try again later.' },
