@@ -13,7 +13,7 @@ jobs:
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "x-warmup-token: ${{ secrets.WARMUP_TOKEN }}" \
-            ${{ secrets.RENDER_API_URL }}/api/warmup)
+            ${{ secrets.RENDER_API_URL }}/api/health)
           echo "Response status: $STATUS"
           if [ "$STATUS" != "200" ]; then
             echo "Warning: warmup check returned $STATUS"
