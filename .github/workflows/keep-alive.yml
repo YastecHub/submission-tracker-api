@@ -2,19 +2,35 @@ name: Keep Render Awake
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    # Avoid the busiest top-of-hour boundary. GitHub schedules are best-effort.
+    - cron: '2-57/5 * * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-keep-alive
+  cancel-in-progress: true
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Ping health endpoint
         run: |
           BASE_URL="${{ secrets.RENDER_API_URL }}"
           BASE_URL="${BASE_URL%/}"
 
-          STATUS=$(curl -s -o /tmp/warmup-response.txt -w "%{http_code}" \
+          if [ -z "$BASE_URL" ]; then
+            echo "RENDER_API_URL is not configured"
+            exit 1
+          fi
+
+          STATUS=$(curl --silent --show-error --location \
+            --connect-timeout 20 --max-time 120 --retry 2 --retry-all-errors \
+            -o /tmp/warmup-response.txt -w "%{http_code}" \
             -H "x-warmup-token: ${{ secrets.WARMUP_TOKEN }}" \
             "$BASE_URL/api/warmup")
 
@@ -29,7 +45,9 @@ jobs:
           echo ""
           echo "Checking basic health endpoint as fallback..."
 
-          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/health")
+          HEALTH_STATUS=$(curl --silent --show-error --location \
+            --connect-timeout 20 --max-time 120 --retry 2 --retry-all-errors \
+            -o /dev/null -w "%{http_code}" "$BASE_URL/api/health")
           echo "Health response status: $HEALTH_STATUS"
 
           if [ "$HEALTH_STATUS" != "200" ]; then

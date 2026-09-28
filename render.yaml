@@ -2,12 +2,18 @@ services:
   - type: web
     name: submission-tracker-api
     runtime: node
-    buildCommand: npm install && npm run build
-    startCommand: node dist/index.js
+    branch: master
+    autoDeployTrigger: commit
+    buildCommand: npm ci && npm run build
+    # Free services cannot use Render's pre-deploy command, so run the
+    # idempotent production migration before starting each deployed build.
+    startCommand: npm run db:migrate:deploy && npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "20"
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
@@ -15,4 +21,10 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: CLIENT_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: WARMUP_TOKEN
         sync: false

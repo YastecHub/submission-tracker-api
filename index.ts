@@ -127,6 +127,15 @@ app.use('/api/payment-events', paymentEventRoutes);
 app.use('/api/payment-receipts', paymentReceiptRoutes);
 app.use('/api', transactionRoutes);
 
+app.get('/', (_req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    service: 'NEXIUM API',
+    health: '/api/health',
+    docs: '/api/docs',
+  });
+});
+
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
@@ -160,8 +169,7 @@ server.on('error', (error) => {
 });
 
 server.on('listening', async () => {
-  // Use Render's public URL in production, otherwise localhost
-  const base = process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${PORT}`;
+  const base = process.env.PUBLIC_API_URL ?? process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${PORT}`;
 
   console.log('\n');
   console.log('  \x1b[1m\x1b[35mNEXIUM API\x1b[0m');
