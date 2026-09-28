@@ -8,5 +8,14 @@ declare namespace Express {
       iat?: number;
       exp?: number;
     };
+    student?: {
+      scope: 'student';
+      id: string;
+      matricNumber: string;
+      email: string;
+      fullName: string;
+      iat?: number;
+      exp?: number;
+    };
   }
 }

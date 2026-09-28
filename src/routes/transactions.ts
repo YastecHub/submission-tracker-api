@@ -11,6 +11,8 @@ import {
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
 import upload from '../middleware/uploadMiddleware';
+import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
+import { rateLimit } from 'express-rate-limit';
 
 const router = Router();
 
@@ -33,8 +35,15 @@ function handleProofUpload(req: Request, res: Response, next: NextFunction): voi
 }
 
 // Public — student-facing transparency page
-router.get('/transparency/ledger', getLedger);
-router.post('/transparency/verify-matric', verifyMatric);
+const verificationLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification attempts, please try again later.' },
+});
+router.get('/transparency/ledger', studentAuthMiddleware, getLedger);
+router.post('/transparency/verify-matric', verificationLimiter, studentAuthMiddleware, verifyMatric);
 
 // Admin — list/create/edit/delete transactions
 const financeRoles = requireRole('fin_sec', 'dev');

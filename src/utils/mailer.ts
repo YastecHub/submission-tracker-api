@@ -89,3 +89,24 @@ export async function sendWelcomeEmail(
     html: buildEmail(name, role),
   });
 }
+
+export async function sendStudentRegistrationOtp(name: string, email: string, code: string): Promise<void> {
+  if (!process.env.RESEND_API_KEY) throw new Error('Email delivery is not configured');
+  const result = await resend.emails.send({
+    from: process.env.MAIL_FROM ?? 'NEXIUM <onboarding@resend.dev>',
+    to: email,
+    subject: 'Your NEXIUM verification code',
+    html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#111827">
+      <h2>Verify your student account</h2>
+      <p>Hello ${escapeEmailHtml(name)},</p>
+      <p>Your verification code is:</p>
+      <p style="font-size:32px;font-weight:700;letter-spacing:8px">${code}</p>
+      <p>This code expires in 10 minutes. If you did not request it, you can ignore this message.</p>
+    </div>`,
+  });
+  if (result.error) throw new Error(result.error.message);
+}
+
+function escapeEmailHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
+}

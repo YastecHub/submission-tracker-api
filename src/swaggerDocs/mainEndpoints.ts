@@ -194,18 +194,18 @@
  * /api/payment-receipts:
  *   post:
  *     tags: [Payment Receipts]
- *     summary: Public receipt upload
+ *     summary: Submit a receipt as the signed-in student
+ *     security:
+ *       - studentBearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [eventId, fullName, matricNumber, receipt]
+ *             required: [eventId, receipt]
  *             properties:
  *               eventId: { type: string, format: uuid }
- *               fullName: { type: string }
- *               matricNumber: { type: string }
  *               level: { type: string, nullable: true }
  *               receipt:
  *                 type: string
@@ -279,7 +279,9 @@
  * /api/payment-receipts/status/{id}:
  *   get:
  *     tags: [Payment Receipts]
- *     summary: Public receipt status lookup
+ *     summary: Get the signed-in student's receipt status
+ *     security:
+ *       - studentBearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -292,12 +294,9 @@
  * /api/payment-receipts/my-tickets:
  *   get:
  *     tags: [Payment Receipts]
- *     summary: Public confirmed ticket lookup by matric number
- *     parameters:
- *       - in: query
- *         name: matricNumber
- *         required: true
- *         schema: { type: string }
+ *     summary: List the signed-in student's confirmed tickets
+ *     security:
+ *       - studentBearerAuth: []
  *     responses:
  *       200:
  *         description: Confirmed tickets for the matric number
@@ -368,7 +367,9 @@
  * /api/transparency/ledger:
  *   get:
  *     tags: [Transactions]
- *     summary: Public transparency ledger
+ *     summary: Transparency ledger for signed-in students
+ *     security:
+ *       - studentBearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -389,16 +390,9 @@
  * /api/transparency/verify-matric:
  *   post:
  *     tags: [Transactions]
- *     summary: Verify matric number before showing transparency page
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [matricNumber]
- *             properties:
- *               matricNumber: { type: string }
+ *     summary: Confirm the signed-in student's roster record (compatibility endpoint)
+ *     security:
+ *       - studentBearerAuth: []
  *     responses:
  *       200:
  *         description: Matric number found

@@ -29,6 +29,38 @@ model User {
   transactions      Transaction[]
 }
 
+model StudentAccount {
+  id           String   @id @default(uuid())
+  matricNumber String   @unique
+  email        String   @unique
+  fullName     String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model StudentRoster {
+  id           String   @id @default(uuid())
+  matricNumber String   @unique
+  fullName     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model StudentRegistrationOtp {
+  id           String   @id @default(uuid())
+  matricNumber String   @unique
+  email        String
+  codeHash     String
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  lastSentAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
 model SubmissionEvent {
   id          String      @id @default(uuid())
   slug        String      @unique

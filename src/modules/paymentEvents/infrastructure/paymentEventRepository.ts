@@ -25,6 +25,17 @@ export class PaymentEventRepository {
     });
   }
 
+  async confirmedDistinctMatricCount(eventIds: string[]) {
+    if (eventIds.length === 0) return 0;
+    const rows = await prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+      SELECT COUNT(DISTINCT "matricNumber")::bigint AS "count"
+      FROM "PaymentReceipt"
+      WHERE "eventId" IN (${Prisma.join(eventIds)})
+        AND "status" = 'confirmed'
+    `);
+    return Number(rows[0]?.count ?? 0);
+  }
+
   create(data: {
     slug: string;
     title: string;

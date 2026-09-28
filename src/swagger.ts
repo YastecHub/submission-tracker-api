@@ -18,7 +18,7 @@ const options: swaggerJsdoc.Options = {
       version: '1.0.0',
       description:
         'NEXIUM — class submissions, payments and account transparency. ' +
-        'CRs create events and confirm submissions; students submit without an account.',
+        'CRs create events and confirm submissions; verified student accounts access payments, tickets and transparency.',
     },
     servers,
     components: {
@@ -29,6 +29,12 @@ const options: swaggerJsdoc.Options = {
           bearerFormat: 'JWT',
           description: 'JWT token obtained from POST /api/auth/login',
         },
+        studentBearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Student JWT obtained from POST /api/student-auth/login or registration verification',
+        },
       },
       schemas: {
         User: {
@@ -38,6 +44,15 @@ const options: swaggerJsdoc.Options = {
             email: { type: 'string', format: 'email' },
             name: { type: 'string' },
             createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        StudentAccount: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            matricNumber: { type: 'string' },
+            email: { type: 'string', format: 'email' },
+            fullName: { type: 'string' },
           },
         },
         SubmissionEvent: {

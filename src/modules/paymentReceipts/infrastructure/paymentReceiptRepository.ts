@@ -122,7 +122,7 @@ export class PaymentReceiptRepository {
 
   findConfirmedTicketsByMatric(matricNumber: string) {
     return prisma.paymentReceipt.findMany({
-      where: { matricNumber, status: 'confirmed', event: { hasTickets: true, isDeleted: false } },
+      where: { matricNumber: { equals: matricNumber, mode: 'insensitive' }, status: 'confirmed', event: { hasTickets: true, isDeleted: false } },
       include: { event: { select: { title: true, slug: true, amount: true, hasTickets: true } } },
       orderBy: { confirmedAt: 'desc' },
     });

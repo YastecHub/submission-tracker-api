@@ -1,0 +1,2 @@
+export const PICNIC_PAYMENT_EVENT_ID = 'cafd3826-985d-42d5-96bd-7c0cfd0b623d';
+export const PICNIC_LEGACY_EVENT_ID = '7d4b6050-9681-4917-989c-82ae015b755e';

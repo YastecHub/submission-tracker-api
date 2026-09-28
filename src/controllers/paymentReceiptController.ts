@@ -5,7 +5,7 @@ import { routeParam } from '../shared/http/param';
 const excelContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export const submitPaymentReceipt = created((req) =>
-  paymentReceiptService.submit({ ...req.body, file: req.file })
+  paymentReceiptService.submit({ ...req.body, file: req.file }, req.student!)
 );
 
 export const getPaymentReceipts = ok((req) =>
@@ -26,11 +26,11 @@ export const rejectPaymentReceipt = ok((req) =>
 );
 
 export const getPaymentReceiptStatus = ok((req) =>
-  paymentReceiptService.status(routeParam(req.params.id))
+  paymentReceiptService.status(routeParam(req.params.id), req.student!)
 );
 
 export const getMyTickets = ok((req) =>
-  paymentReceiptService.myTickets(req.query.matricNumber as string | undefined)
+  paymentReceiptService.myTickets(req.student!)
 );
 
 export const claimPaymentReceipt = ok((req) =>

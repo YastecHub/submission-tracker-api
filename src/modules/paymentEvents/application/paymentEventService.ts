@@ -3,6 +3,7 @@ import { uniquePaymentSlug } from '../../../utils/slugGenerator';
 import { generateQR } from '../../../utils/qrGenerator';
 import { badRequest, forbidden, notFound } from '../../../shared/errors/AppError';
 import { paymentEventRepository, PaymentEventRepository } from '../infrastructure/paymentEventRepository';
+import { PICNIC_LEGACY_EVENT_ID, PICNIC_PAYMENT_EVENT_ID } from '../domain/picnic';
 
 function canManage(user: Express.Request['user'], event: { createdBy: string }): boolean {
   return user!.role === 'dev' || user!.role === 'fin_sec' || event.createdBy === user!.id;
@@ -21,7 +22,13 @@ export class PaymentEventService {
       this.repository.countActive(),
     ]);
 
-    const statusGroups = await this.repository.receiptStatusCounts(events.map((event) => event.id));
+    const eventIds = events.map((event) => event.id);
+    const [statusGroups, combinedPicnicConfirmed] = await Promise.all([
+      this.repository.receiptStatusCounts(eventIds),
+      eventIds.includes(PICNIC_PAYMENT_EVENT_ID)
+        ? this.repository.confirmedDistinctMatricCount([PICNIC_PAYMENT_EVENT_ID, PICNIC_LEGACY_EVENT_ID])
+        : Promise.resolve(null),
+    ]);
 
     const statusMap = new Map<string, { confirmed: number; rejected: number; pending: number }>();
     for (const group of statusGroups) {
@@ -35,6 +42,15 @@ export class PaymentEventService {
     return {
       events: events.map((event) => {
         const stats = statusMap.get(event.id) ?? { confirmed: 0, rejected: 0, pending: 0 };
+        if (event.id === PICNIC_PAYMENT_EVENT_ID && combinedPicnicConfirmed !== null) {
+          return {
+            ...event,
+            totalReceipts: combinedPicnicConfirmed,
+            confirmedCount: combinedPicnicConfirmed,
+            rejectedCount: stats.rejected,
+            pendingCount: stats.pending,
+          };
+        }
         return {
           ...event,
           totalReceipts: event._count.receipts,

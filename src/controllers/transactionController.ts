@@ -7,7 +7,7 @@ export const getLedger = ok((req) =>
 );
 
 export const verifyMatric = ok((req) =>
-  transactionService.verifyMatric(req.body.matricNumber)
+  transactionService.verifyMatric(req.student!.matricNumber)
 );
 
 export const listTransactionsAdmin = ok((req) =>

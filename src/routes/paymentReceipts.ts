@@ -13,6 +13,7 @@ import {
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
 import upload from '../middleware/uploadMiddleware';
+import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
 
 const router = Router();
 const paymentRoles = requireRole('cr', 'fin_sec', 'dev');
@@ -36,14 +37,12 @@ function handleUpload(req: Request, res: Response, next: NextFunction): void {
   });
 }
 
-// Public — student submits receipt (multipart/form-data)
-router.post('/', handleUpload, submitPaymentReceipt);
+// Student-authenticated receipt and ticket routes
+router.post('/', studentAuthMiddleware, handleUpload, submitPaymentReceipt);
 
-// Public — student polls status
-router.get('/status/:id', getPaymentReceiptStatus);
+router.get('/status/:id', studentAuthMiddleware, getPaymentReceiptStatus);
 
-// Public — student fetches their tickets by matric
-router.get('/my-tickets', getMyTickets);
+router.get('/my-tickets', studentAuthMiddleware, getMyTickets);
 
 // Protected — admin routes
 router.post('/scan', authMiddleware, paymentRoles, claimPaymentReceipt);

@@ -16,12 +16,12 @@ function canManage(user: Express.Request['user'], event: { createdBy: string }):
 export class PaymentReceiptService {
   constructor(private readonly repository: PaymentReceiptRepository) {}
 
-  async submit(input: { eventId?: string; fullName?: string; matricNumber?: string; level?: string; file?: Express.Multer.File }) {
-    if (!input.eventId || !input.fullName || !input.matricNumber) throw badRequest('eventId, fullName, and matricNumber are required');
+  async submit(input: { eventId?: string; level?: string; file?: Express.Multer.File }, student: NonNullable<Express.Request['student']>) {
+    if (!input.eventId) throw badRequest('eventId is required');
     if (!input.file) throw badRequest('Payment receipt image is required');
 
-    const fullName = input.fullName.trim();
-    const matricNumber = input.matricNumber.trim().toUpperCase();
+    const fullName = student.fullName.trim();
+    const matricNumber = student.matricNumber.trim().toUpperCase();
     const level = input.level?.trim() || null;
     if (!fullName || !matricNumber || fullName.length > 120 || matricNumber.length > 50) {
       throw badRequest('fullName and matricNumber must be valid and reasonably short');
@@ -116,9 +116,9 @@ export class PaymentReceiptService {
     return updated;
   }
 
-  async status(id: string) {
+  async status(id: string, student: NonNullable<Express.Request['student']>) {
     const receipt = await this.repository.findStatus(id);
-    if (!receipt) throw notFound('Receipt not found');
+    if (!receipt || receipt.matricNumber.trim().toUpperCase() !== student.matricNumber.trim().toUpperCase()) throw notFound('Receipt not found');
     let ticketQrCode = receipt.ticketQrCode;
     if (receipt.event.hasTickets && !ticketQrCode) {
       ticketQrCode = await generateQR(receipt.id);
@@ -145,10 +145,8 @@ export class PaymentReceiptService {
     };
   }
 
-  async myTickets(matricNumberInput?: string) {
-    if (!matricNumberInput?.trim()) throw badRequest('matricNumber is required');
-    const matricNumber = matricNumberInput.trim().toUpperCase();
-    const receipts = await this.repository.findConfirmedTicketsByMatric(matricNumber);
+  async myTickets(student: NonNullable<Express.Request['student']>) {
+    const receipts = await this.repository.findConfirmedTicketsByMatric(student.matricNumber);
     const tickets = [];
     for (const receipt of receipts) {
       let qr = receipt.ticketQrCode;
