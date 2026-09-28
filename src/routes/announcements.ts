@@ -15,9 +15,10 @@ import {
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
 import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
+import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
 
 const router = Router();
-const requireStaff = requireRole('cr', 'acr', 'fin_sec', 'dev');
+const requireStaff = requireRole(...STAFF_ROLES);
 
 /**
  * @openapi

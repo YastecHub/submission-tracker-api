@@ -10,15 +10,17 @@ import {
 } from '../controllers/eventController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
+import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
 
 const router = Router();
 const submissionRoles = requireRole('cr', 'acr', 'dev');
+const staffRoles = requireRole(...STAFF_ROLES);
 
 /**
  * @openapi
  * tags:
  *   name: Events
- *   description: Submission event management (CR only, except public slug lookup)
+ *   description: Staff event viewing with role- and ownership-restricted management
  */
 
 /**
@@ -68,7 +70,7 @@ const submissionRoles = requireRole('cr', 'acr', 'dev');
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', authMiddleware, submissionRoles, listEvents);
+router.get('/', authMiddleware, staffRoles, listEvents);
 
 /**
  * @openapi
@@ -162,7 +164,7 @@ router.post('/', authMiddleware, submissionRoles, createEvent);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/id/:id', authMiddleware, submissionRoles, getEventById);
+router.get('/id/:id', authMiddleware, staffRoles, getEventById);
 
 /**
  * @openapi

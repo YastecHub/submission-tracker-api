@@ -13,6 +13,7 @@ import { requireRole } from '../middleware/requireRole';
 import upload from '../middleware/uploadMiddleware';
 import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
 import { rateLimit } from 'express-rate-limit';
+import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
 
 const router = Router();
 
@@ -47,8 +48,9 @@ router.post('/transparency/verify-matric', verificationLimiter, studentAuthMiddl
 
 // Admin — list/create/edit/delete transactions
 const financeRoles = requireRole('fin_sec', 'dev');
+const staffRoles = requireRole(...STAFF_ROLES);
 
-router.get('/transactions', authMiddleware, financeRoles, listTransactionsAdmin);
+router.get('/transactions', authMiddleware, staffRoles, listTransactionsAdmin);
 router.post('/transactions', authMiddleware, financeRoles, handleProofUpload, createTransaction);
 router.patch('/transactions/:id', authMiddleware, financeRoles, handleProofUpload, updateTransaction);
 router.delete('/transactions/:id', authMiddleware, financeRoles, deleteTransaction);

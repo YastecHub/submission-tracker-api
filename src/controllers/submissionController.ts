@@ -7,7 +7,7 @@ const excelContentType = 'application/vnd.openxmlformats-officedocument.spreadsh
 export const createSubmission = created((req) => submissionService.create(req.body));
 
 export const getSubmissions = ok((req) =>
-  submissionService.list(routeParam(req.params.eventId), req.query as Record<string, string>, req.user)
+  submissionService.list(routeParam(req.params.eventId), req.query as Record<string, string>)
 );
 
 export const confirmSubmission = ok((req) =>
@@ -27,6 +27,6 @@ export const getSubmissionStatus = ok((req) =>
 );
 
 export const exportToExcel = file(async (req) => ({
-  ...(await submissionService.export(routeParam(req.params.eventId), req.user)),
+  ...(await submissionService.export(routeParam(req.params.eventId))),
   contentType: excelContentType,
 }));

@@ -9,11 +9,11 @@ export const submitPaymentReceipt = created((req) =>
 );
 
 export const getPaymentReceipts = ok((req) =>
-  paymentReceiptService.list(routeParam(req.params.eventId), req.query as Record<string, string>, req.user)
+  paymentReceiptService.list(routeParam(req.params.eventId), req.query as Record<string, string>)
 );
 
 export const exportPaymentReceiptsToExcel = file(async (req) => ({
-  ...(await paymentReceiptService.export(routeParam(req.params.eventId), req.user)),
+  ...(await paymentReceiptService.export(routeParam(req.params.eventId))),
   contentType: excelContentType,
 }));
 

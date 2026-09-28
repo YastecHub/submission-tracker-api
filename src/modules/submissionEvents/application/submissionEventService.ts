@@ -1,7 +1,7 @@
 import { EventType } from '@prisma/client';
 import { uniqueSlug } from '../../../utils/slugGenerator';
 import { cacheDelete, cacheGet, cacheSet } from '../../../utils/cache';
-import { badRequest, forbidden, notFound } from '../../../shared/errors/AppError';
+import { badRequest, notFound } from '../../../shared/errors/AppError';
 import {
   submissionEventRepository,
   SubmissionEventRepository,
@@ -9,10 +9,6 @@ import {
 } from '../infrastructure/submissionEventRepository';
 
 const EVENT_TYPES: EventType[] = ['assignment', 'attendance', 'lab', 'other'];
-
-function canManage(user: Express.Request['user'], event: { createdBy: string }): boolean {
-  return user!.role === 'dev' || event.createdBy === user!.id;
-}
 
 function serializeWithStats(event: SubmissionEventWithCount, confirmedCount: number) {
   return {
@@ -95,10 +91,9 @@ export class SubmissionEventService {
     return event;
   }
 
-  async getById(id: string, user: Express.Request['user']) {
+  async getById(id: string) {
     const event = await this.repository.findActiveById(id);
     if (!event) throw notFound('Event not found');
-    if (!canManage(user, event)) throw forbidden('You are not allowed to view this event');
 
     const confirmedCount = await this.repository.confirmedCount(id);
     return serializeWithStats(event, confirmedCount);

@@ -49,7 +49,7 @@ export class SubmissionService {
     return { submission: updated };
   }
 
-  async list(eventId: string, query: { page?: string; limit?: string; search?: string }, user: Express.Request['user']) {
+  async list(eventId: string, query: { page?: string; limit?: string; search?: string }) {
     const page = Math.max(1, parseInt(query.page ?? '') || 1);
     const limit = Math.min(100, Math.max(1, parseInt(query.limit ?? '') || 50));
     const search = (query.search ?? '').trim();
@@ -57,8 +57,6 @@ export class SubmissionService {
 
     const event = await this.repository.findActiveEventById(eventId);
     if (!event) throw notFound('Event not found');
-    if (!canManage(user, event)) throw forbidden('You are not allowed to view submissions for this event');
-
     const searchWhere: Prisma.SubmissionWhereInput = search.length >= 2
       ? { OR: [{ fullName: { contains: search, mode: Prisma.QueryMode.insensitive } }, { matricNumber: { contains: search, mode: Prisma.QueryMode.insensitive } }] }
       : {};
@@ -113,10 +111,9 @@ export class SubmissionService {
     return submission;
   }
 
-  async export(eventId: string, user: Express.Request['user']) {
+  async export(eventId: string) {
     const event = await this.repository.findActiveEventById(eventId);
     if (!event) throw notFound('Event not found');
-    if (!canManage(user, event)) throw forbidden('You are not allowed to export submissions for this event');
     const total = await this.repository.count({ eventId, isConfirmed: true });
     if (total > MAX_EXPORT_ROWS) throw badRequest(`Export is limited to ${MAX_EXPORT_ROWS} rows. Use filters or contact support.`);
     const submissions = await this.repository.findConfirmedForExport(eventId);

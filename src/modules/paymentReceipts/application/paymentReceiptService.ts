@@ -60,7 +60,7 @@ export class PaymentReceiptService {
     return { receipt: responseReceipt };
   }
 
-  async list(eventId: string, query: { page?: string; limit?: string; search?: string; status?: string }, user: Express.Request['user']) {
+  async list(eventId: string, query: { page?: string; limit?: string; search?: string; status?: string }) {
     const page = Math.max(1, parseInt(query.page ?? '') || 1);
     const limit = Math.min(100, Math.max(1, parseInt(query.limit ?? '') || 50));
     const search = (query.search ?? '').trim();
@@ -68,8 +68,6 @@ export class PaymentReceiptService {
 
     const event = await this.repository.findActiveEventById(eventId);
     if (!event) throw notFound('Payment event not found');
-    if (!canManage(user, event)) throw forbidden('You are not allowed to view receipts for this payment event');
-
     const where: Prisma.PaymentReceiptWhereInput = {
       eventId,
       ...(search.length >= 2 ? { OR: [{ fullName: { contains: search, mode: Prisma.QueryMode.insensitive } }, { matricNumber: { contains: search, mode: Prisma.QueryMode.insensitive } }] } : {}),
@@ -88,10 +86,9 @@ export class PaymentReceiptService {
     return { receipts, total, confirmedTotal, rejectedTotal, pendingTotal, claimedTotal, page, totalPages: Math.ceil(total / limit), limit };
   }
 
-  async export(eventId: string, user: Express.Request['user']) {
+  async export(eventId: string) {
     const event = await this.repository.findActiveEventById(eventId);
     if (!event) throw notFound('Payment event not found');
-    if (!canManage(user, event)) throw forbidden('You are not allowed to export receipts for this payment event');
     const total = await this.repository.count({ eventId });
     if (total > MAX_EXPORT_ROWS) throw badRequest(`Export is limited to ${MAX_EXPORT_ROWS} rows. Use filters or contact support.`);
     return exportPaymentReceipts(await this.repository.findForExport(eventId), event);

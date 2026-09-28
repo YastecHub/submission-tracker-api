@@ -18,7 +18,7 @@ export const getPaymentEventBySlug = ok((req) =>
 );
 
 export const getPaymentEventById = ok((req) =>
-  paymentEventService.getById(routeParam(req.params.id), req.user)
+  paymentEventService.getById(routeParam(req.params.id))
 );
 
 export const updatePaymentEvent = ok((req) =>

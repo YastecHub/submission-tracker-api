@@ -18,7 +18,7 @@ export const getEventBySlug = ok((req) =>
 );
 
 export const getEventById = ok((req) =>
-  submissionEventService.getById(routeParam(req.params.id), req.user)
+  submissionEventService.getById(routeParam(req.params.id))
 );
 
 export const toggleClose = ok((req) =>

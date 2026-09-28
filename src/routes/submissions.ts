@@ -10,9 +10,11 @@ import {
 } from '../controllers/submissionController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
+import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
 
 const router = Router();
 const submissionRoles = requireRole('cr', 'acr', 'dev');
+const staffRoles = requireRole(...STAFF_ROLES);
 
 /**
  * @openapi
@@ -187,7 +189,7 @@ router.get('/status/:id', getSubmissionStatus);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:eventId/export', authMiddleware, submissionRoles, exportToExcel);
+router.get('/:eventId/export', authMiddleware, staffRoles, exportToExcel);
 router.patch('/:eventId/confirm-all', authMiddleware, submissionRoles, confirmAllSubmissions);
 
 /**
@@ -260,7 +262,7 @@ router.patch('/:eventId/confirm-all', authMiddleware, submissionRoles, confirmAl
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:eventId', authMiddleware, submissionRoles, getSubmissions);
+router.get('/:eventId', authMiddleware, staffRoles, getSubmissions);
 
 /**
  * @openapi

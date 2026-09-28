@@ -4,6 +4,7 @@ import { UserRole } from '@prisma/client';
 import { badRequest, forbidden, notFound, AppError } from '../../../shared/errors/AppError';
 import { sendWelcomeEmail } from '../../../utils/mailer';
 import { userRepository, UserRepository } from '../infrastructure/userRepository';
+import { canCreateStaffAccount } from '../domain/staffAccess';
 
 function safeUser(user: { id: string; email: string; name: string; role: UserRole }) {
   return { id: user.id, email: user.email, name: user.name, role: user.role };
@@ -78,14 +79,13 @@ export class AuthService {
   }
 
   async createUser(callerRole: UserRole, input: { name?: string; email?: string; password?: string; role?: string }) {
-    if (callerRole !== 'cr' && callerRole !== 'dev') throw forbidden('Only CR or dev can create user accounts');
+    if (!canCreateStaffAccount(callerRole)) throw forbidden('Only developers can create staff accounts');
     if (!input.name || !input.email || !input.password || !input.role) {
       throw badRequest('name, email, password, and role are required');
     }
 
     const validRoles: UserRole[] = ['cr', 'acr', 'fin_sec', 'dev'];
     if (!validRoles.includes(input.role as UserRole)) throw badRequest(`role must be one of: ${validRoles.join(', ')}`);
-    if (input.role === 'dev' && callerRole !== 'dev') throw forbidden('Only dev users can create dev accounts');
     if (input.password.length < 8) throw badRequest('Password must be at least 8 characters');
 
     const email = input.email.trim().toLowerCase();

@@ -1,14 +1,18 @@
 import { Router } from 'express';
 import { login, me, savePushSubscription, updateProfile, changePassword, createUser } from '../controllers/authController';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { requireRole } from '../middleware/requireRole';
+import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
 
 const router = Router();
+const requireStaff = requireRole(...STAFF_ROLES);
+const requireDev = requireRole('dev');
 
 /**
  * @openapi
  * tags:
  *   name: Auth
- *   description: Authentication endpoints for Course Representatives
+ *   description: Authentication endpoints for staff
  */
 
 /**
@@ -16,8 +20,8 @@ const router = Router();
  * /api/auth/login:
  *   post:
  *     tags: [Auth]
- *     summary: CR login
- *     description: Authenticate a Course Representative. Returns a 7-day JWT token.
+ *     summary: Staff login
+ *     description: Authenticate a staff member. Returns a 7-day JWT token.
  *     requestBody:
  *       required: true
  *       content:
@@ -67,7 +71,7 @@ router.post('/login', login);
  *   get:
  *     tags: [Auth]
  *     summary: Get current user
- *     description: Returns the authenticated CR's profile.
+ *     description: Returns the authenticated staff member's profile.
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -90,10 +94,10 @@ router.post('/login', login);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/me', authMiddleware, me);
-router.patch('/profile', authMiddleware, updateProfile);
-router.patch('/password', authMiddleware, changePassword);
-router.post('/push-subscription', authMiddleware, savePushSubscription);
-router.post('/users', authMiddleware, createUser);
+router.get('/me', authMiddleware, requireStaff, me);
+router.patch('/profile', authMiddleware, requireStaff, updateProfile);
+router.patch('/password', authMiddleware, requireStaff, changePassword);
+router.post('/push-subscription', authMiddleware, requireStaff, savePushSubscription);
+router.post('/users', authMiddleware, requireDev, createUser);
 
 export default router;

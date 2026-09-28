@@ -1,13 +1,9 @@
 import { Prisma } from '@prisma/client';
 import { uniquePaymentSlug } from '../../../utils/slugGenerator';
 import { generateQR } from '../../../utils/qrGenerator';
-import { badRequest, forbidden, notFound } from '../../../shared/errors/AppError';
+import { badRequest, notFound } from '../../../shared/errors/AppError';
 import { paymentEventRepository, PaymentEventRepository } from '../infrastructure/paymentEventRepository';
 import { PICNIC_LEGACY_EVENT_ID, PICNIC_PAYMENT_EVENT_ID } from '../domain/picnic';
-
-function canManage(user: Express.Request['user'], event: { createdBy: string }): boolean {
-  return user!.role === 'dev' || user!.role === 'fin_sec' || event.createdBy === user!.id;
-}
 
 export class PaymentEventService {
   constructor(private readonly repository: PaymentEventRepository) {}
@@ -114,10 +110,9 @@ export class PaymentEventService {
     return event;
   }
 
-  async getById(id: string, user: Express.Request['user']) {
+  async getById(id: string) {
     const event = await this.repository.findActiveById(id);
     if (!event) throw notFound('Payment event not found');
-    if (!canManage(user, event)) throw forbidden('You are not allowed to view this payment event');
 
     const [confirmedCount, rejectedCount, pendingCount] = await this.repository.receiptCounts(id);
     return {
