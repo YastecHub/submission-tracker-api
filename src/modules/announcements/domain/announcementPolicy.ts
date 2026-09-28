@@ -18,6 +18,7 @@ export function canPublishAnnouncement(role: UserRole, category: AnnouncementCat
 }
 
 export function canEditAnnouncement(user: StaffIdentity, announcement: ManagedAnnouncement): boolean {
+  if (announcement.status === 'archived') return false;
   if (announcement.status !== 'draft') return canPublishAnnouncement(user.role, announcement.category);
   if (user.role === 'dev' || user.role === 'cr') return true;
   if (user.role === 'fin_sec' && announcement.category === 'finance') return true;

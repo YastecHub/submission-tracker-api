@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import {
   archiveAnnouncement,
   createAnnouncement,
@@ -9,6 +10,7 @@ import {
   listAnnouncementsAdmin,
   listPublishedAnnouncements,
   markAnnouncementRead,
+  organizeAnnouncement,
   publishAnnouncement,
   updateAnnouncement,
 } from '../controllers/announcementController';
@@ -19,6 +21,14 @@ import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
 
 const router = Router();
 const requireStaff = requireRole(...STAFF_ROLES);
+const assistantLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  max: 8,
+  keyGenerator: (req) => req.user!.id,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'You have used the announcement assistant several times. Review the current suggestions before trying again.' },
+});
 
 /**
  * @openapi
@@ -90,6 +100,36 @@ router.get('/feed/:slug', studentAuthMiddleware, getPublishedAnnouncement);
 router.post('/feed/:id/read', studentAuthMiddleware, markAnnouncementRead);
 
 router.get('/admin/payment-options', authMiddleware, requireStaff, listAnnouncementPaymentOptions);
+
+/**
+ * @openapi
+ * /api/bulletin/admin/organize:
+ *   post:
+ *     tags: [Nexium Bulletin Staff]
+ *     summary: Suggest a structured draft from staff-provided source material
+ *     description: Returns reviewable suggestions only. It never saves or publishes announcement content.
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rawSource]
+ *             properties:
+ *               rawSource: { type: string, minLength: 20, maxLength: 30000 }
+ *               announcementId: { type: string, format: uuid, nullable: true }
+ *     responses:
+ *       200:
+ *         description: Validated suggestion with warnings, split suggestions and audit metadata
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/AnnouncementAiOrganization' }
+ *       429: { description: Assistant request limit reached }
+ *       502: { description: A safe, validated suggestion could not be produced }
+ *       503: { description: Announcement assistant is not configured }
+ */
+router.post('/admin/organize', authMiddleware, requireStaff, assistantLimiter, organizeAnnouncement);
 
 /**
  * @openapi

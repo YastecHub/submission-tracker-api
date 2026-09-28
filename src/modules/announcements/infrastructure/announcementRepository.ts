@@ -21,6 +21,19 @@ export interface AnnouncementWriteData {
   paymentEventId: string | null;
 }
 
+export interface AnnouncementAiAcceptance {
+  runId: string;
+  requestedBy: string;
+  acceptedFields: Prisma.InputJsonValue;
+}
+
+export class AnnouncementAiAcceptanceConflictError extends Error {
+  constructor() {
+    super('Announcement assistant acceptance conflict');
+    this.name = 'AnnouncementAiAcceptanceConflictError';
+  }
+}
+
 const staffDetailInclude = {
   creator: { select: { id: true, name: true, role: true } },
   updater: { select: { id: true, name: true, role: true } },
@@ -102,8 +115,15 @@ export class AnnouncementRepository {
     });
   }
 
-  create(data: AnnouncementWriteData & { slug: string; createdBy: string; updatedBy: string }) {
-    return prisma.announcement.create({ data, include: staffDetailInclude });
+  create(params: {
+    data: AnnouncementWriteData & { slug: string; createdBy: string; updatedBy: string };
+    aiAcceptance: AnnouncementAiAcceptance | null;
+  }) {
+    return prisma.$transaction(async (tx) => {
+      const created = await tx.announcement.create({ data: params.data });
+      await this.recordAiAcceptance(tx, params.aiAcceptance, created.id);
+      return tx.announcement.findUniqueOrThrow({ where: { id: created.id }, include: staffDetailInclude });
+    });
   }
 
   async updateWithVersion(params: {
@@ -112,6 +132,8 @@ export class AnnouncementRepository {
     data: AnnouncementWriteData & { updatedBy: string };
     createRevision: boolean;
     changeNote: string | null;
+    origin: 'manual' | 'ai_assisted';
+    aiAcceptance: AnnouncementAiAcceptance | null;
   }) {
     return prisma.$transaction(async (tx) => {
       const result = await tx.announcement.updateMany({
@@ -130,10 +152,12 @@ export class AnnouncementRepository {
             summary: updated.summary,
             content: updated.content as Prisma.InputJsonValue,
             changeNote: params.changeNote,
+            origin: params.origin,
             createdBy: params.data.updatedBy,
           },
         });
       }
+      await this.recordAiAcceptance(tx, params.aiAcceptance, updated.id);
       return tx.announcement.findUniqueOrThrow({ where: { id: params.id }, include: staffDetailInclude });
     });
   }
@@ -314,6 +338,29 @@ export class AnnouncementRepository {
       });
       return { id, version: announcement.version, read: true };
     });
+  }
+
+  private async recordAiAcceptance(
+    tx: Prisma.TransactionClient,
+    acceptance: AnnouncementAiAcceptance | null,
+    announcementId: string,
+  ): Promise<void> {
+    if (!acceptance) return;
+    const result = await tx.announcementAiRun.updateMany({
+      where: {
+        id: acceptance.runId,
+        requestedBy: acceptance.requestedBy,
+        status: 'completed',
+        acceptedAt: null,
+        OR: [{ announcementId: null }, { announcementId }],
+      },
+      data: {
+        announcementId,
+        acceptedFields: acceptance.acceptedFields,
+        acceptedAt: new Date(),
+      },
+    });
+    if (result.count !== 1) throw new AnnouncementAiAcceptanceConflictError();
   }
 }
 

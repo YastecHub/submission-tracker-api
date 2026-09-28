@@ -33,4 +33,5 @@ test('allows contributors to edit their own drafts but not published posts', () 
   const user = { id: 'assistant-cr', role: 'acr' as const };
   assert.equal(canEditAnnouncement(user, { createdBy: user.id, category: 'general', status: 'draft' }), true);
   assert.equal(canEditAnnouncement(user, { createdBy: user.id, category: 'general', status: 'published' }), false);
+  assert.equal(canEditAnnouncement({ id: 'developer', role: 'dev' }, { createdBy: user.id, category: 'general', status: 'archived' }), false);
 });

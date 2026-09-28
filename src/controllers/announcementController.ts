@@ -1,4 +1,5 @@
 import { announcementService } from '../modules/announcements/application/announcementService';
+import { announcementAiService } from '../modules/announcements/application/announcementAiService';
 import { created, ok } from '../shared/http/controller';
 import { routeParam } from '../shared/http/param';
 
@@ -28,6 +29,10 @@ export const archiveAnnouncement = ok((req) =>
 
 export const listAnnouncementPaymentOptions = ok(() =>
   announcementService.paymentOptions()
+);
+
+export const organizeAnnouncement = ok((req) =>
+  announcementAiService.organize(req.body, req.user!)
 );
 
 export const listPublishedAnnouncements = ok((req) =>

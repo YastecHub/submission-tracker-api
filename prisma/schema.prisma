@@ -31,6 +31,7 @@ model User {
   announcementsUpdated   Announcement[]         @relation("AnnouncementUpdatedBy")
   announcementsPublished Announcement[]         @relation("AnnouncementPublishedBy")
   announcementRevisions  AnnouncementRevision[] @relation("AnnouncementRevisionCreatedBy")
+  announcementAiRuns     AnnouncementAiRun[]    @relation("AnnouncementAiRunRequestedBy")
 }
 
 model StudentAccount {
@@ -182,6 +183,11 @@ enum AnnouncementSourceType {
   external_information
 }
 
+enum AnnouncementAiRunStatus {
+  completed
+  failed
+}
+
 model Announcement {
   id                      String                 @id @default(uuid())
   slug                    String                 @unique
@@ -212,11 +218,35 @@ model Announcement {
   updatedAt               DateTime               @updatedAt
   revisions               AnnouncementRevision[]
   reads                   AnnouncementRead[]
+  aiRuns                  AnnouncementAiRun[]
 
   @@index([status, isPinned, publishedAt])
   @@index([status, category, publishedAt])
   @@index([createdBy, status, updatedAt])
   @@index([paymentEventId])
+}
+
+model AnnouncementAiRun {
+  id               String        @id @default(uuid())
+  announcementId   String?
+  announcement     Announcement? @relation(fields: [announcementId], references: [id], onDelete: SetNull)
+  requestedBy      String
+  requester        User          @relation("AnnouncementAiRunRequestedBy", fields: [requestedBy], references: [id])
+  provider         String
+  model            String
+  promptVersion    String
+  sourceHash       String
+  sourceLength     Int
+  status           AnnouncementAiRunStatus
+  result           Json?
+  acceptedFields   Json?
+  acceptedAt       DateTime?
+  latencyMs        Int?
+  errorCode        String?
+  createdAt        DateTime      @default(now())
+
+  @@index([requestedBy, createdAt])
+  @@index([announcementId, createdAt])
 }
 
 model AnnouncementRevision {

@@ -210,6 +210,42 @@ const options: swaggerJsdoc.Options = {
             paymentEventId: { type: 'string', format: 'uuid', nullable: true },
             expectedVersion: { type: 'integer', minimum: 1, description: 'Required when updating an existing announcement' },
             changeNote: { type: 'string', maxLength: 300 },
+            aiReview: {
+              type: 'object',
+              description: 'Selective acceptance record for a validated assistant run',
+              properties: {
+                runId: { type: 'string', format: 'uuid' },
+                acceptedFields: { type: 'array', items: { type: 'string', enum: ['title', 'summary', 'category', 'priority', 'sections'] } },
+                acceptedSectionIds: { type: 'array', items: { type: 'string' } },
+              },
+            },
+          },
+        },
+        AnnouncementAiOrganization: {
+          type: 'object',
+          properties: {
+            runId: { type: 'string', format: 'uuid' },
+            suggestion: {
+              type: 'object',
+              properties: {
+                title: { type: 'object', properties: { value: { type: 'string' }, sourceQuotes: { type: 'array', items: { type: 'string' } } } },
+                summary: { type: 'object', properties: { value: { type: 'string' }, sourceQuotes: { type: 'array', items: { type: 'string' } } } },
+                category: { type: 'object', properties: { value: { type: 'string' }, reason: { type: 'string' } } },
+                priority: { type: 'object', properties: { value: { type: 'string' }, reason: { type: 'string' } } },
+                sections: {
+                  type: 'array',
+                  items: {
+                    allOf: [
+                      { $ref: '#/components/schemas/AnnouncementSection' },
+                      { type: 'object', properties: { sourceQuotes: { type: 'array', items: { type: 'string' } } } },
+                    ],
+                  },
+                },
+                warnings: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' }, sourceQuote: { type: 'string', nullable: true } } } },
+                splitSuggestions: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, reason: { type: 'string' }, sourceQuote: { type: 'string' } } } },
+              },
+            },
+            audit: { type: 'object', properties: { provider: { type: 'string' }, model: { type: 'string' }, promptVersion: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' } } },
           },
         },
         Error: {

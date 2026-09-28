@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   AnnouncementCategory,
   AnnouncementPriority,
@@ -9,12 +10,19 @@ import {
 import { uniqueAnnouncementSlug } from '../../../utils/slugGenerator';
 import { AppError, badRequest, forbidden, notFound } from '../../../shared/errors/AppError';
 import { normalizeAnnouncementDocument } from '../domain/announcementContent';
+import type { AiOrganizationResult } from '../domain/announcementAiOutput';
 import { canEditAnnouncement, canPublishAnnouncement } from '../domain/announcementPolicy';
 import {
   announcementRepository,
+  AnnouncementAiAcceptance,
+  AnnouncementAiAcceptanceConflictError,
   AnnouncementRepository,
   AnnouncementWriteData,
 } from '../infrastructure/announcementRepository';
+import {
+  announcementAiRunRepository,
+  AnnouncementAiRunRepository,
+} from '../infrastructure/announcementAiRunRepository';
 
 const CATEGORIES: AnnouncementCategory[] = ['general', 'academic', 'practical', 'finance', 'event', 'opportunity', 'emergency'];
 const PRIORITIES: AnnouncementPriority[] = ['normal', 'important', 'urgent'];
@@ -42,7 +50,18 @@ interface WriteInput {
   paymentEventId?: unknown;
   expectedVersion?: unknown;
   changeNote?: unknown;
+  aiReview?: unknown;
 }
+
+interface AiReview {
+  runId: string;
+  acceptedFields: Array<'title' | 'summary' | 'category' | 'priority' | 'sections'>;
+  acceptedSectionIds: string[];
+}
+
+const AI_REVIEW_FIELDS = ['title', 'summary', 'category', 'priority', 'sections'] as const;
+const SECTION_ID_PATTERN = /^[a-zA-Z0-9_-]{1,80}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T, label: string): T {
   if (value === undefined || value === null || value === '') return fallback;
@@ -98,6 +117,37 @@ function cleanSearch(value: unknown): string | undefined {
   return search || undefined;
 }
 
+function aiReview(value: unknown): AiReview | null {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw badRequest('The assistant review record is invalid');
+  const input = value as { runId?: unknown; acceptedFields?: unknown; acceptedSectionIds?: unknown };
+  if (typeof input.runId !== 'string' || !UUID_PATTERN.test(input.runId)) throw badRequest('The assistant review record is invalid');
+  if (!Array.isArray(input.acceptedFields) || input.acceptedFields.length < 1 || input.acceptedFields.length > AI_REVIEW_FIELDS.length) {
+    throw badRequest('Choose at least one assistant suggestion before saving');
+  }
+  const acceptedFields = Array.from(new Set(input.acceptedFields.map((field) => {
+    if (typeof field !== 'string' || !AI_REVIEW_FIELDS.includes(field as typeof AI_REVIEW_FIELDS[number])) {
+      throw badRequest('The assistant review selection is invalid');
+    }
+    return field as AiReview['acceptedFields'][number];
+  })));
+  if (!Array.isArray(input.acceptedSectionIds) || input.acceptedSectionIds.length > 20) {
+    throw badRequest('The assistant section selection is invalid');
+  }
+  const acceptedSectionIds = Array.from(new Set(input.acceptedSectionIds.map((id) => {
+    if (typeof id !== 'string' || !SECTION_ID_PATTERN.test(id)) throw badRequest('The assistant section selection is invalid');
+    return id;
+  })));
+  if (acceptedFields.includes('sections') && acceptedSectionIds.length === 0) {
+    throw badRequest('Choose at least one assistant section before saving');
+  }
+  return { runId: input.runId, acceptedFields, acceptedSectionIds };
+}
+
+function hashSource(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 function pageValues(pageInput: unknown, limitInput: unknown) {
   const page = Math.max(1, parseInt(String(pageInput ?? '')) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(String(limitInput ?? '')) || 20));
@@ -105,7 +155,10 @@ function pageValues(pageInput: unknown, limitInput: unknown) {
 }
 
 export class AnnouncementService {
-  constructor(private readonly repository: AnnouncementRepository) {}
+  constructor(
+    private readonly repository: AnnouncementRepository,
+    private readonly aiRuns: AnnouncementAiRunRepository,
+  ) {}
 
   async listAdmin(query: Record<string, unknown>) {
     const { page, limit, skip } = pageValues(query.page, query.limit);
@@ -138,13 +191,22 @@ export class AnnouncementService {
 
   async create(input: WriteInput, user: StaffUser) {
     const data = toWriteData(input);
+    const review = aiReview(input.aiReview);
+    await this.validateAiReview(review, data, user.id, null);
     await this.validatePayment(data.paymentEventId);
-    return this.repository.create({
-      ...data,
-      slug: await uniqueAnnouncementSlug(data.title),
-      createdBy: user.id,
-      updatedBy: user.id,
-    });
+    try {
+      return await this.repository.create({
+        data: {
+          ...data,
+          slug: await uniqueAnnouncementSlug(data.title),
+          createdBy: user.id,
+          updatedBy: user.id,
+        },
+        aiAcceptance: this.aiAcceptance(review, user.id),
+      });
+    } catch (error) {
+      this.rethrowAiAcceptanceConflict(error);
+    }
   }
 
   async update(id: string, input: WriteInput, user: StaffUser) {
@@ -155,20 +217,28 @@ export class AnnouncementService {
     }
 
     const data = toWriteData(input);
+    const review = aiReview(input.aiReview);
+    await this.validateAiReview(review, data, user.id, id);
     if (current.status !== 'draft' && !canPublishAnnouncement(user.role as UserRole, data.category)) {
       throw forbidden('You are not allowed to publish changes to this announcement');
     }
     await this.validatePayment(data.paymentEventId);
 
-    const updated = await this.repository.updateWithVersion({
-      id,
-      expectedVersion: expectedVersion(input.expectedVersion),
-      data: { ...data, updatedBy: user.id },
-      createRevision: current.status === 'published',
-      changeNote: optionalText(input.changeNote, 300, 'Change note'),
-    });
-    if (!updated) throw new AppError(409, 'This announcement was changed elsewhere. Reload it before saving again.');
-    return updated;
+    try {
+      const updated = await this.repository.updateWithVersion({
+        id,
+        expectedVersion: expectedVersion(input.expectedVersion),
+        data: { ...data, updatedBy: user.id },
+        createRevision: current.status === 'published',
+        changeNote: optionalText(input.changeNote, 300, 'Change note'),
+        origin: review ? 'ai_assisted' : 'manual',
+        aiAcceptance: this.aiAcceptance(review, user.id),
+      });
+      if (!updated) throw new AppError(409, 'This announcement was changed elsewhere. Reload it before saving again.');
+      return updated;
+    } catch (error) {
+      this.rethrowAiAcceptanceConflict(error);
+    }
   }
 
   async publish(id: string, input: { expectedVersion?: unknown; changeNote?: unknown }, user: StaffUser) {
@@ -258,6 +328,58 @@ export class AnnouncementService {
       throw badRequest('The related payment could not be found');
     }
   }
+
+  private async validateAiReview(review: AiReview | null, data: AnnouncementWriteData, userId: string, announcementId: string | null) {
+    if (!review) return;
+    if (!data.rawSource) throw badRequest('Keep the reviewed source material before saving assistant suggestions');
+    const run = await this.aiRuns.findOwnedCompleted(review.runId, userId);
+    if (!run || (run.announcementId && run.announcementId !== announcementId)) {
+      throw badRequest('The assistant review could not be verified. Request a new suggestion.');
+    }
+    if (run.sourceHash !== hashSource(data.rawSource)) {
+      throw badRequest('The source material changed after the suggestion. Request a new suggestion before saving it.');
+    }
+
+    const suggestion = run.result as unknown as AiOrganizationResult | null;
+    if (!suggestion) throw badRequest('The assistant review could not be verified. Request a new suggestion.');
+    if (review.acceptedFields.includes('title') && data.title !== suggestion.title.value) this.throwChangedSuggestion();
+    if (review.acceptedFields.includes('summary') && data.summary !== suggestion.summary.value) this.throwChangedSuggestion();
+    if (review.acceptedFields.includes('category') && data.category !== suggestion.category.value) this.throwChangedSuggestion();
+    if (review.acceptedFields.includes('priority') && data.priority !== suggestion.priority.value) this.throwChangedSuggestion();
+    if (review.acceptedFields.includes('sections')) {
+      const content = data.content as unknown as { sections?: Array<{ id?: unknown; heading?: unknown; body?: unknown }> };
+      const savedSections = new Map((content.sections ?? []).map((section) => [section.id, section]));
+      const suggestedSections = new Map(suggestion.sections.map((section) => [section.id, section]));
+      for (const id of review.acceptedSectionIds) {
+        const saved = savedSections.get(id);
+        const suggested = suggestedSections.get(id);
+        if (!saved || !suggested || saved.heading !== suggested.heading || saved.body !== suggested.body) this.throwChangedSuggestion();
+      }
+    }
+  }
+
+  private throwChangedSuggestion(): never {
+    throw badRequest('An accepted assistant suggestion was changed. Review the edited draft and save it as a manual change.');
+  }
+
+  private aiAcceptance(review: AiReview | null, userId: string): AnnouncementAiAcceptance | null {
+    if (!review) return null;
+    return {
+      runId: review.runId,
+      requestedBy: userId,
+      acceptedFields: {
+        fields: review.acceptedFields,
+        sectionIds: review.acceptedSectionIds,
+      },
+    };
+  }
+
+  private rethrowAiAcceptanceConflict(error: unknown): never {
+    if (error instanceof AnnouncementAiAcceptanceConflictError) {
+      throw badRequest('This assistant suggestion was already used or changed. Request a new suggestion before saving.');
+    }
+    throw error;
+  }
 }
 
-export const announcementService = new AnnouncementService(announcementRepository);
+export const announcementService = new AnnouncementService(announcementRepository, announcementAiRunRepository);
