@@ -16,27 +16,32 @@ enum UserRole {
 }
 
 model User {
-  id                String    @id @default(uuid())
-  email             String    @unique
-  passwordHash      String
-  name              String
-  role              UserRole  @default(cr)
-  hasLoggedInBefore Boolean   @default(false)
-  pushSubscription  String?
-  createdAt         DateTime  @default(now())
-  events            SubmissionEvent[]
-  paymentEvents     PaymentEvent[]
-  transactions      Transaction[]
+  id                     String                 @id @default(uuid())
+  email                  String                 @unique
+  passwordHash           String
+  name                   String
+  role                   UserRole               @default(cr)
+  hasLoggedInBefore      Boolean                @default(false)
+  pushSubscription       String?
+  createdAt              DateTime               @default(now())
+  events                 SubmissionEvent[]
+  paymentEvents          PaymentEvent[]
+  transactions           Transaction[]
+  announcementsCreated   Announcement[]         @relation("AnnouncementCreatedBy")
+  announcementsUpdated   Announcement[]         @relation("AnnouncementUpdatedBy")
+  announcementsPublished Announcement[]         @relation("AnnouncementPublishedBy")
+  announcementRevisions  AnnouncementRevision[] @relation("AnnouncementRevisionCreatedBy")
 }
 
 model StudentAccount {
-  id           String   @id @default(uuid())
-  matricNumber String   @unique
-  email        String   @unique
-  fullName     String
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String             @id @default(uuid())
+  matricNumber      String             @unique
+  email             String             @unique
+  fullName          String
+  passwordHash      String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  announcementReads AnnouncementRead[]
 }
 
 model StudentRoster {
@@ -62,18 +67,18 @@ model StudentRegistrationOtp {
 }
 
 model SubmissionEvent {
-  id          String      @id @default(uuid())
-  slug        String      @unique
+  id          String       @id @default(uuid())
+  slug        String       @unique
   title       String
   courseCode  String
-  type        EventType   @default(assignment)
+  type        EventType    @default(assignment)
   description String?
   deadline    DateTime
-  isClosed    Boolean     @default(false)
-  isDeleted   Boolean     @default(false)
+  isClosed    Boolean      @default(false)
+  isDeleted   Boolean      @default(false)
   createdBy   String
-  user        User        @relation(fields: [createdBy], references: [id])
-  createdAt   DateTime    @default(now())
+  user        User         @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime     @default(now())
   submissions Submission[]
 
   @@index([isDeleted, createdAt])
@@ -125,52 +130,153 @@ enum AmountCheckStatus {
 }
 
 model PaymentEvent {
-  id            String          @id @default(uuid())
-  slug          String          @unique
+  id            String           @id @default(uuid())
+  slug          String           @unique
   title         String
   description   String?
-  amount        Decimal         @db.Decimal(10, 2)
+  amount        Decimal          @db.Decimal(10, 2)
   accountNumber String
   accountName   String
   bankName      String
   deadline      DateTime
-  hasTickets    Boolean         @default(false)
-  isClosed      Boolean         @default(false)
-  isDeleted     Boolean         @default(false)
+  hasTickets    Boolean          @default(false)
+  isClosed      Boolean          @default(false)
+  isDeleted     Boolean          @default(false)
   createdBy     String
-  creator       User            @relation(fields: [createdBy], references: [id])
-  createdAt     DateTime        @default(now())
+  creator       User             @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime         @default(now())
   receipts      PaymentReceipt[]
+  announcements Announcement[]
 
   @@index([isDeleted, createdAt])
   @@index([createdBy, isDeleted])
   @@index([deadline])
 }
 
+enum AnnouncementStatus {
+  draft
+  published
+  archived
+}
+
+enum AnnouncementCategory {
+  general
+  academic
+  practical
+  finance
+  event
+  opportunity
+  emergency
+}
+
+enum AnnouncementPriority {
+  normal
+  important
+  urgent
+}
+
+enum AnnouncementSourceType {
+  official_class
+  educational_contribution
+  lecturer_information
+  external_information
+}
+
+model Announcement {
+  id                      String                 @id @default(uuid())
+  slug                    String                 @unique
+  title                   String
+  summary                 String
+  content                 Json
+  rawSource               String?
+  category                AnnouncementCategory   @default(general)
+  priority                AnnouncementPriority   @default(normal)
+  status                  AnnouncementStatus     @default(draft)
+  sourceType              AnnouncementSourceType @default(official_class)
+  contributorName         String?
+  contributorCredit       String?
+  isPinned                Boolean                @default(false)
+  requiresAcknowledgement Boolean                @default(false)
+  paymentEventId          String?
+  paymentEvent            PaymentEvent?          @relation(fields: [paymentEventId], references: [id])
+  version                 Int                    @default(1)
+  createdBy               String
+  creator                 User                   @relation("AnnouncementCreatedBy", fields: [createdBy], references: [id])
+  updatedBy               String
+  updater                 User                   @relation("AnnouncementUpdatedBy", fields: [updatedBy], references: [id])
+  publishedBy             String?
+  publisher               User?                  @relation("AnnouncementPublishedBy", fields: [publishedBy], references: [id])
+  publishedAt             DateTime?
+  archivedAt              DateTime?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  revisions               AnnouncementRevision[]
+  reads                   AnnouncementRead[]
+
+  @@index([status, isPinned, publishedAt])
+  @@index([status, category, publishedAt])
+  @@index([createdBy, status, updatedAt])
+  @@index([paymentEventId])
+}
+
+model AnnouncementRevision {
+  id             String       @id @default(uuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  version        Int
+  title          String
+  summary        String
+  content        Json
+  changeNote     String?
+  origin         String       @default("manual")
+  createdBy      String
+  creator        User         @relation("AnnouncementRevisionCreatedBy", fields: [createdBy], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@unique([announcementId, version])
+  @@index([announcementId, createdAt])
+}
+
+model AnnouncementRead {
+  id                  String         @id @default(uuid())
+  announcementId      String
+  announcement        Announcement   @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  studentId           String
+  student             StudentAccount @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lastReadVersion     Int
+  firstReadAt         DateTime       @default(now())
+  lastReadAt          DateTime       @default(now())
+  acknowledgedVersion Int?
+  acknowledgedAt      DateTime?
+
+  @@unique([announcementId, studentId])
+  @@index([studentId, lastReadAt])
+}
+
 model PaymentReceipt {
-  id              String        @id @default(uuid())
-  eventId         String
-  event           PaymentEvent  @relation(fields: [eventId], references: [id])
-  fullName        String
-  matricNumber    String
-  level           String?
-  extractedAmount Decimal?      @db.Decimal(10, 2)
-  amountCheckStatus AmountCheckStatus @default(pending)
+  id                    String            @id @default(uuid())
+  eventId               String
+  event                 PaymentEvent      @relation(fields: [eventId], references: [id])
+  fullName              String
+  matricNumber          String
+  level                 String?
+  extractedAmount       Decimal?          @db.Decimal(10, 2)
+  amountCheckStatus     AmountCheckStatus @default(pending)
   amountCheckConfidence Float?
-  amountCheckNote String?
-  amountCheckedAt DateTime?
-  receiptUrl      String
-  receiptPublicId String
-  submittedAt     DateTime      @default(now())
-  status          PaymentStatus @default(pending)
-  confirmedAt     DateTime?
-  confirmedBy     String?
-  note            String?
-  ticketQrCode    String?
-  isClaimed       Boolean       @default(false)
-  claimedAt       DateTime?
-  claimedBy       String?
-  transaction     Transaction?
+  amountCheckNote       String?
+  amountCheckedAt       DateTime?
+  receiptUrl            String
+  receiptPublicId       String
+  submittedAt           DateTime          @default(now())
+  status                PaymentStatus     @default(pending)
+  confirmedAt           DateTime?
+  confirmedBy           String?
+  note                  String?
+  ticketQrCode          String?
+  isClaimed             Boolean           @default(false)
+  claimedAt             DateTime?
+  claimedBy             String?
+  transaction           Transaction?
 
   @@unique([matricNumber, eventId])
   @@index([eventId, fullName])

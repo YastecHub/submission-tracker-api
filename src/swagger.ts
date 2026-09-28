@@ -15,8 +15,8 @@ const options: swaggerJsdoc.Options = {
       title: 'NEXIUM API',
       version: '1.0.0',
       description:
-        'NEXIUM — class submissions, payments and account transparency. ' +
-        'CRs create events and confirm submissions; verified student accounts access payments, tickets and transparency.',
+        'NEXIUM — class submissions, payments, account transparency and Nexium Bulletin. ' +
+        'Staff manage class workflows and durable announcements; verified student accounts access payments, tickets, transparency and published updates.',
     },
     servers,
     components: {
@@ -152,6 +152,64 @@ const options: swaggerJsdoc.Options = {
             isDeleted: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        AnnouncementSection: {
+          type: 'object',
+          required: ['id', 'body'],
+          properties: {
+            id: { type: 'string' },
+            heading: { type: 'string', nullable: true, maxLength: 120 },
+            body: { type: 'string', maxLength: 10000 },
+          },
+        },
+        AnnouncementDocument: {
+          type: 'object',
+          required: ['version', 'sections'],
+          properties: {
+            version: { type: 'integer', enum: [1] },
+            sections: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 20,
+              items: { $ref: '#/components/schemas/AnnouncementSection' },
+            },
+          },
+        },
+        AnnouncementSummary: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            slug: { type: 'string' },
+            title: { type: 'string' },
+            summary: { type: 'string' },
+            category: { type: 'string', enum: ['general', 'academic', 'practical', 'finance', 'event', 'opportunity', 'emergency'] },
+            priority: { type: 'string', enum: ['normal', 'important', 'urgent'] },
+            status: { type: 'string', enum: ['draft', 'published', 'archived'] },
+            isPinned: { type: 'boolean' },
+            version: { type: 'integer' },
+            publishedAt: { type: 'string', format: 'date-time', nullable: true },
+            updatedAt: { type: 'string', format: 'date-time' },
+            isUnread: { type: 'boolean', description: 'Student feed responses only' },
+          },
+        },
+        AnnouncementWrite: {
+          type: 'object',
+          required: ['title', 'summary', 'content'],
+          properties: {
+            title: { type: 'string', maxLength: 180 },
+            summary: { type: 'string', maxLength: 500 },
+            content: { $ref: '#/components/schemas/AnnouncementDocument' },
+            rawSource: { type: 'string', maxLength: 50000, description: 'Staff-only original source material' },
+            category: { type: 'string', enum: ['general', 'academic', 'practical', 'finance', 'event', 'opportunity', 'emergency'] },
+            priority: { type: 'string', enum: ['normal', 'important', 'urgent'] },
+            sourceType: { type: 'string', enum: ['official_class', 'educational_contribution', 'lecturer_information', 'external_information'] },
+            contributorName: { type: 'string', nullable: true },
+            contributorCredit: { type: 'string', nullable: true },
+            isPinned: { type: 'boolean' },
+            paymentEventId: { type: 'string', format: 'uuid', nullable: true },
+            expectedVersion: { type: 'integer', minimum: 1, description: 'Required when updating an existing announcement' },
+            changeNote: { type: 'string', maxLength: 300 },
           },
         },
         Error: {

@@ -17,6 +17,7 @@ import paymentEventRoutes from './src/routes/paymentEvents';
 import paymentReceiptRoutes from './src/routes/paymentReceipts';
 import transactionRoutes from './src/routes/transactions';
 import studentAuthRoutes from './src/routes/studentAuth';
+import announcementRoutes from './src/routes/announcements';
 
 const app = express();
 
@@ -125,6 +126,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/payment-events', paymentEventRoutes);
 app.use('/api/payment-receipts', paymentReceiptRoutes);
+app.use('/api/bulletin', announcementRoutes);
 app.use('/api', transactionRoutes);
 
 app.get('/', (_req: Request, res: Response) => {

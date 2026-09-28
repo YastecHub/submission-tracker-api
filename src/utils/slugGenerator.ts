@@ -39,3 +39,14 @@ export async function uniquePaymentSlug(title: string): Promise<string> {
   } while (exists);
   return slug;
 }
+
+export async function uniqueAnnouncementSlug(title: string): Promise<string> {
+  let slug: string;
+  let exists = true;
+  do {
+    slug = `${toSlugPart(title) || 'bulletin'}-${randomSuffix(6)}`;
+    const found = await prisma.announcement.findUnique({ where: { slug } });
+    exists = !!found;
+  } while (exists);
+  return slug;
+}
