@@ -2,15 +2,11 @@ import swaggerJsdoc from 'swagger-jsdoc';
 
 const publicApiUrl = process.env.PUBLIC_API_URL ?? process.env.RENDER_EXTERNAL_URL;
 
-const servers = [
-  ...(publicApiUrl
-    ? [{ url: publicApiUrl.replace(/\/$/, ''), description: 'Production' }]
-    : []),
-  {
-    url: `http://localhost:${process.env.PORT ?? 3001}`,
-    description: 'Local development server',
-  },
-];
+const servers = publicApiUrl
+  ? [{ url: publicApiUrl.replace(/\/$/, ''), description: 'Production' }]
+  : process.env.NODE_ENV === 'production'
+    ? [{ url: '/', description: 'Current deployment' }]
+    : [{ url: `http://localhost:${process.env.PORT ?? 3001}`, description: 'Local development server' }];
 
 const options: swaggerJsdoc.Options = {
   definition: {
