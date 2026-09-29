@@ -22,7 +22,10 @@ function sourceText(value: unknown): string {
   if (typeof value !== 'string') throw badRequest('Paste source material before asking for help');
   const source = value.trim();
   if (source.length < 20) throw badRequest('Add a little more source material before asking for help');
-  if (source.length > 30_000) throw badRequest('Shorten the source material to 30,000 characters before asking for help');
+  // AI organizer temporarily unavailable: gpt-oss-20b model on Groq has insufficient context window.
+  throw badRequest('The announcement assistant is currently unavailable. Please organize your announcement manually using the Composer.');
+  // Original validation (for when a working model is configured):
+  // if (source.length > 1_000) throw badRequest('Source material is too long for the AI organizer (max ~1,000 characters). Please shorten or organize manually using the Composer.');
   return source;
 }
 
@@ -101,6 +104,7 @@ export class AnnouncementAiService {
       const errorCode = error instanceof AnnouncementOrganizerError || error instanceof InvalidAiOrganizationError
         ? error.code
         : 'unexpected_failure';
+      console.error(`[bulletin assistant] organize error [${errorCode}]:`, error);
       try {
         await this.runs.createFailed({ ...auditBase, latencyMs: Date.now() - startedAt, errorCode });
       } catch {

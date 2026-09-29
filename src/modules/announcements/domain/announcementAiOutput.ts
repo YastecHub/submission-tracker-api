@@ -106,15 +106,15 @@ function normalizeComparable(value: string): string {
 }
 
 function sourceQuote(value: unknown, rawSource: string, code: string): string {
-  const quote = textValue(value, 700, code);
+  const quote = textValue(value, 2_000, code);
   if (!normalizeComparable(rawSource).includes(normalizeComparable(quote))) {
     throw new InvalidAiOrganizationError(`${code}_not_found`);
   }
   return quote;
 }
 
-function sourceQuotes(value: unknown, rawSource: string, code: string): string[] {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 5) throw new InvalidAiOrganizationError(code);
+function sourceQuotes(value: unknown, rawSource: string, code: string, maxQuotes = 5): string[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > maxQuotes) throw new InvalidAiOrganizationError(code);
   return value.map((quote, index) => sourceQuote(quote, rawSource, `${code}_${index + 1}`));
 }
 
@@ -124,7 +124,7 @@ function suggestedText(value: unknown, rawSource: string, max: number, code: str
   if (!normalizeComparable(rawSource).includes(normalizeComparable(text))) {
     throw new InvalidAiOrganizationError(`${code}_not_extractive`);
   }
-  return { value: text, sourceQuotes: sourceQuotes(candidate.sourceQuotes, rawSource, `${code}_source_quotes`) };
+  return { value: text, sourceQuotes: sourceQuotes(candidate.sourceQuotes, rawSource, `${code}_source_quotes`, 5) };
 }
 
 function enumValue<T extends string>(value: unknown, allowed: readonly T[], code: string): T {
@@ -135,6 +135,13 @@ function enumValue<T extends string>(value: unknown, allowed: readonly T[], code
 function optionalSourceQuote(value: unknown, rawSource: string, code: string): string | null {
   if (value === undefined || value === null || value === '') return null;
   return sourceQuote(value, rawSource, code);
+}
+
+function stripListMarkers(value: string): string {
+  return value
+    .replace(/(^|\n)\s*(?:[-*•–—]|\d+[.)]|\([0-9a-zA-Z]+\)|[a-zA-Z][.)])\s+/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function assertExtractiveSection(
@@ -151,10 +158,25 @@ function assertExtractiveSection(
     if (!headingIsGrounded) throw new InvalidAiOrganizationError(`${code}_heading_not_grounded`);
   }
 
-  const withoutListMarkers = (value: string) => value.replace(/(^|\n)\s*[-*•]\s+/g, '$1');
-  if (normalizeComparable(withoutListMarkers(body)) !== normalizeComparable(withoutListMarkers(quotes.join('\n')))) {
-    throw new InvalidAiOrganizationError(`${code}_body_not_extractive`);
+  const normalizedBody = normalizeComparable(stripListMarkers(body));
+  const normalizedQuotes = normalizeComparable(stripListMarkers(quotes.join('\n')));
+
+  if (normalizedBody === normalizedQuotes) {
+    return;
   }
+
+  // If the body without list markers is directly present in rawSource, it is extractive
+  if (normalizeComparable(rawSource).includes(normalizedBody)) {
+    return;
+  }
+
+  // If quotes and body have whitespace or separator differences, check concatenated quotes
+  const quotesConcatenated = normalizeComparable(quotes.map((q) => stripListMarkers(q)).join(' '));
+  if (normalizedBody === quotesConcatenated) {
+    return;
+  }
+
+  throw new InvalidAiOrganizationError(`${code}_body_not_extractive`);
 }
 
 export function normalizeAiOrganization(value: unknown, rawSource: string): AiOrganizationResult {
@@ -188,7 +210,7 @@ export function normalizeAiOrganization(value: unknown, rawSource: string): AiOr
     const result = {
       heading,
       body: textValue(item.body, 10_000, `section_${index + 1}_body`),
-      sourceQuotes: sourceQuotes(item.sourceQuotes, rawSource, `section_${index + 1}_source_quotes`),
+      sourceQuotes: sourceQuotes(item.sourceQuotes, rawSource, `section_${index + 1}_source_quotes`, 50),
     };
     assertExtractiveSection(result.heading, result.body, result.sourceQuotes, rawSource, `section_${index + 1}`);
     return result;

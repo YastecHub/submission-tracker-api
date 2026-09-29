@@ -120,8 +120,11 @@ export function startNotificationDeliveryWorker(): () => void {
       console.error('[bulletin notifications] periodic cleanup failed:', error instanceof Error ? error.message : error);
     });
 
-  void run();
-  void runCleanup();
+  const initialTimer = setTimeout(run, 2_000);
+  initialTimer.unref();
+
+  const initialCleanupTimer = setTimeout(runCleanup, 60_000);
+  initialCleanupTimer.unref();
 
   const timer = setInterval(run, intervalMs);
   timer.unref();
@@ -130,6 +133,8 @@ export function startNotificationDeliveryWorker(): () => void {
   cleanupTimer.unref();
 
   return () => {
+    clearTimeout(initialTimer);
+    clearTimeout(initialCleanupTimer);
     clearInterval(timer);
     clearInterval(cleanupTimer);
   };

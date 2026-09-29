@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "NotificationOutbox_subscriptionId_announcementId_announcementVe" RENAME TO "NotificationOutbox_subscriptionId_announcementId_announceme_key";
