@@ -20,7 +20,7 @@ export class StudentPushSubscriptionRepository {
         update: { ...input, studentId, userAgent, lastSeenAt: new Date() },
         select: { id: true, createdAt: true, updatedAt: true },
       });
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 
   async isOwned(studentId: string, endpoint: string) {
@@ -39,7 +39,7 @@ export class StudentPushSubscriptionRepository {
         data: { status: 'dead', lockedAt: null, lastError: 'Notifications disabled by student' },
       });
       return tx.studentPushSubscription.deleteMany({ where: { id: subscription.id } });
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 }
 

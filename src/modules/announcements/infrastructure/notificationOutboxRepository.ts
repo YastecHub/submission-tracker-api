@@ -66,7 +66,7 @@ export class NotificationOutboxRepository {
         data: { status: 'dead', lockedAt: null, lastError: error },
       });
       await tx.studentPushSubscription.deleteMany({ where: { id: subscriptionId } });
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 
   async cleanupInvalidSubscriptions(retentionDays = 30): Promise<{ removedSubscriptions: number; prunedOutboxRows: number }> {
@@ -103,7 +103,7 @@ export class NotificationOutboxRepository {
         removedSubscriptions,
         prunedOutboxRows: pruneRes.count,
       };
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 
   private transition(

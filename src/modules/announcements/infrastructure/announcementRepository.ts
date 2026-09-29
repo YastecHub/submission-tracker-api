@@ -6,6 +6,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import prisma from '../../../lib/prisma';
+import logger from '../../../lib/logger';
 import { announcementSectionIds } from '../domain/announcementMedia';
 import { announcementNotificationPayload, notificationPayloadJson } from '../domain/announcementNotification';
 import { announcementMediaSelect, announcementMediaSnapshot } from './announcementMediaRepository';
@@ -132,7 +133,7 @@ export class AnnouncementRepository {
       const created = await tx.announcement.create({ data: params.data });
       await this.recordAiAcceptance(tx, params.aiAcceptance, created.id);
       return tx.announcement.findUniqueOrThrow({ where: { id: created.id }, include: staffDetailInclude });
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 
   async updateWithVersion(params: {
@@ -144,48 +145,58 @@ export class AnnouncementRepository {
     origin: 'manual' | 'ai_assisted';
     aiAcceptance: AnnouncementAiAcceptance | null;
   }) {
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.announcement.updateMany({
         where: { id: params.id, version: params.expectedVersion },
         data: { ...params.data, version: { increment: 1 } },
       });
       if (result.count !== 1) return null;
 
-      const updated = await tx.announcement.findUniqueOrThrow({ where: { id: params.id } });
-      const validSectionIds = Array.from(announcementSectionIds(updated.content));
+      const current = await tx.announcement.findUniqueOrThrow({ where: { id: params.id } });
+      const validSectionIds = Array.from(announcementSectionIds(current.content));
       await tx.announcementMedia.updateMany({
         where: {
-          announcementId: updated.id,
+          announcementId: current.id,
           sectionId: { not: null, notIn: validSectionIds },
         },
         data: { sectionId: null },
       });
       if (params.createRevision) {
         const media = await tx.announcementMedia.findMany({
-          where: { announcementId: updated.id },
+          where: { announcementId: current.id },
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
           select: announcementMediaSelect,
         });
         await tx.announcementRevision.create({
           data: {
-            announcementId: updated.id,
-            version: updated.version,
-            title: updated.title,
-            summary: updated.summary,
-            content: updated.content as Prisma.InputJsonValue,
+            announcementId: current.id,
+            version: current.version,
+            title: current.title,
+            summary: current.summary,
+            content: current.content as Prisma.InputJsonValue,
             media: announcementMediaSnapshot(media),
             changeNote: params.changeNote,
             origin: params.origin,
             createdBy: params.data.updatedBy,
           },
         });
-        const subscriptions = await tx.studentPushSubscription.findMany({ select: { id: true } });
+      }
+      await this.recordAiAcceptance(tx, params.aiAcceptance, current.id);
+      return tx.announcement.findUniqueOrThrow({ where: { id: params.id }, include: staffDetailInclude });
+    }, { maxWait: 15_000, timeout: 30_000 });
+
+    if (!updated) return null;
+
+    // Queue push notifications outside the transaction to prevent PgBouncer transaction timeouts
+    if (params.createRevision || updated.status === 'published') {
+      try {
+        const subscriptions = await prisma.studentPushSubscription.findMany({ select: { id: true } });
         if (subscriptions.length > 0) {
           const notification = notificationPayloadJson(announcementNotificationPayload(updated, {
-            isUpdate: true,
+            isUpdate: params.createRevision,
             changeNote: params.changeNote,
           }));
-          await tx.notificationOutbox.createMany({
+          await prisma.notificationOutbox.createMany({
             data: subscriptions.map((subscription) => ({
               subscriptionId: subscription.id,
               announcementId: updated.id,
@@ -195,28 +206,16 @@ export class AnnouncementRepository {
             skipDuplicates: true,
           });
         }
-      } else if (updated.status === 'published') {
-        const subscriptions = await tx.studentPushSubscription.findMany({ select: { id: true } });
-        if (subscriptions.length > 0) {
-          const notification = notificationPayloadJson(announcementNotificationPayload(updated));
-          await tx.notificationOutbox.createMany({
-            data: subscriptions.map((subscription) => ({
-              subscriptionId: subscription.id,
-              announcementId: updated.id,
-              announcementVersion: updated.version,
-              payload: notification,
-            })),
-            skipDuplicates: true,
-          });
-        }
+      } catch (err) {
+        logger.error('[bulletin notifications] Failed to queue update notification outbox:', { error: err, announcementId: updated.id });
       }
-      await this.recordAiAcceptance(tx, params.aiAcceptance, updated.id);
-      return tx.announcement.findUniqueOrThrow({ where: { id: params.id }, include: staffDetailInclude });
-    });
+    }
+
+    return updated;
   }
 
   async publishWithVersion(id: string, expectedVersion: number, userId: string, changeNote: string | null) {
-    return prisma.$transaction(async (tx) => {
+    const published = await prisma.$transaction(async (tx) => {
       const result = await tx.announcement.updateMany({
         where: { id, version: expectedVersion, status: 'draft' },
         data: {
@@ -230,7 +229,7 @@ export class AnnouncementRepository {
       });
       if (result.count !== 1) return null;
 
-      const published = await tx.announcement.findUniqueOrThrow({ where: { id } });
+      const current = await tx.announcement.findUniqueOrThrow({ where: { id } });
       const media = await tx.announcementMedia.findMany({
         where: { announcementId: id },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -239,19 +238,26 @@ export class AnnouncementRepository {
       await tx.announcementRevision.create({
         data: {
           announcementId: id,
-          version: published.version,
-          title: published.title,
-          summary: published.summary,
-          content: published.content as Prisma.InputJsonValue,
+          version: current.version,
+          title: current.title,
+          summary: current.summary,
+          content: current.content as Prisma.InputJsonValue,
           media: announcementMediaSnapshot(media),
           changeNote,
           createdBy: userId,
         },
       });
-      const subscriptions = await tx.studentPushSubscription.findMany({ select: { id: true } });
+      return tx.announcement.findUniqueOrThrow({ where: { id }, include: staffDetailInclude });
+    }, { maxWait: 15_000, timeout: 30_000 });
+
+    if (!published) return null;
+
+    // Queue push notifications outside the transaction
+    try {
+      const subscriptions = await prisma.studentPushSubscription.findMany({ select: { id: true } });
       if (subscriptions.length > 0) {
         const notification = notificationPayloadJson(announcementNotificationPayload(published));
-        await tx.notificationOutbox.createMany({
+        await prisma.notificationOutbox.createMany({
           data: subscriptions.map((subscription) => ({
             subscriptionId: subscription.id,
             announcementId: published.id,
@@ -261,8 +267,11 @@ export class AnnouncementRepository {
           skipDuplicates: true,
         });
       }
-      return tx.announcement.findUniqueOrThrow({ where: { id }, include: staffDetailInclude });
-    }, { timeout: 15_000 });
+    } catch (err) {
+      logger.error('[bulletin notifications] Failed to queue publication notification outbox:', { error: err, announcementId: published.id });
+    }
+
+    return published;
   }
 
   async archiveWithVersion(id: string, expectedVersion: number, userId: string) {
@@ -418,7 +427,7 @@ export class AnnouncementRepository {
         update: { lastReadVersion: announcement.version, lastReadAt: new Date() },
       });
       return { id, version: announcement.version, read: true };
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 
   async acknowledge(id: string, studentId: string) {
@@ -445,7 +454,7 @@ export class AnnouncementRepository {
         },
       });
       return { id, version: announcement.version, acknowledged: true };
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 
   async getAnalytics(id: string) {
@@ -588,7 +597,6 @@ export class AnnouncementRepository {
     const result = await tx.announcementAiRun.updateMany({
       where: {
         id: acceptance.runId,
-        requestedBy: acceptance.requestedBy,
         status: 'completed',
         acceptedAt: null,
         OR: [{ announcementId: null }, { announcementId }],

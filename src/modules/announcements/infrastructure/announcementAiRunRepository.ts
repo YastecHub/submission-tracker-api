@@ -33,9 +33,14 @@ export class AnnouncementAiRunRepository {
     return prisma.announcementAiRun.create({ data: { ...data, status: 'failed' } });
   }
 
-  findOwnedCompleted(id: string, requestedBy: string) {
+  findOwnedCompleted(id: string, requestedBy?: string) {
     return prisma.announcementAiRun.findFirst({
-      where: { id, requestedBy, status: 'completed', acceptedAt: null },
+      where: {
+        id,
+        ...(requestedBy ? { requestedBy } : {}),
+        status: 'completed',
+        acceptedAt: null,
+      },
       select: { id: true, sourceHash: true, announcementId: true, result: true },
     });
   }

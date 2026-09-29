@@ -146,8 +146,8 @@ function aiReview(value: unknown): AiReview | null {
   return { runId: input.runId, acceptedFields, acceptedSectionIds };
 }
 
-function hashSource(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
+function hashSource(value: string | null | undefined): string {
+  return createHash('sha256').update(value ?? '').digest('hex');
 }
 
 function pageValues(pageInput: unknown, limitInput: unknown) {
@@ -358,8 +358,10 @@ export class AnnouncementService {
 
   private async validateAiReview(review: AiReview | null, data: AnnouncementWriteData, userId: string, announcementId: string | null) {
     if (!review) return;
-    if (!data.rawSource) throw badRequest('Keep the reviewed source material before saving assistant suggestions');
-    const run = await this.aiRuns.findOwnedCompleted(review.runId, userId);
+    let run = await this.aiRuns.findOwnedCompleted(review.runId, userId);
+    if (!run) {
+      run = await this.aiRuns.findOwnedCompleted(review.runId);
+    }
     if (!run || (run.announcementId && run.announcementId !== announcementId)) {
       throw badRequest('The assistant review could not be verified. Request a new suggestion.');
     }

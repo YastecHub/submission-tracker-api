@@ -99,7 +99,7 @@ export class AnnouncementMediaRepository {
       });
 
       return this.finishMutation(tx, params.announcementId, params.userId, params.createRevision, params.changeNote);
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 
   async updateWithVersion(params: {
@@ -130,7 +130,7 @@ export class AnnouncementMediaRepository {
       }
 
       return this.finishMutation(tx, params.announcementId, params.userId, params.createRevision, params.changeNote);
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 
   async deleteWithVersion(params: {
@@ -160,7 +160,7 @@ export class AnnouncementMediaRepository {
       }
 
       return this.finishMutation(tx, params.announcementId, params.userId, params.createRevision, params.changeNote);
-    });
+    }, { maxWait: 15_000, timeout: 30_000 });
   }
 
   private async finishMutation(
