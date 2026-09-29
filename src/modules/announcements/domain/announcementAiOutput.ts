@@ -151,28 +151,65 @@ function assertExtractiveSection(
   rawSource: string,
   code: string,
 ): void {
+  const normalizedRawSource = normalizeComparable(rawSource);
+  const normalizedRawSourceNoMarkers = normalizeComparable(stripListMarkers(rawSource));
+
   if (heading) {
     const normalizedHeading = normalizeComparable(heading);
-    const headingIsGrounded = normalizeComparable(rawSource).includes(normalizedHeading)
+    const headingIsGrounded = normalizedRawSource.includes(normalizedHeading)
+      || normalizedRawSourceNoMarkers.includes(normalizedHeading)
       || SAFE_SECTION_HEADINGS.has(normalizedHeading);
     if (!headingIsGrounded) throw new InvalidAiOrganizationError(`${code}_heading_not_grounded`);
+  }
+
+  // 1. Direct match of body in rawSource (with original formatting/markers preserved)
+  if (normalizedRawSource.includes(normalizeComparable(body))) {
+    return;
   }
 
   const normalizedBody = normalizeComparable(stripListMarkers(body));
   const normalizedQuotes = normalizeComparable(stripListMarkers(quotes.join('\n')));
 
+  // 2. Direct match of body with quotes
   if (normalizedBody === normalizedQuotes) {
     return;
   }
 
-  // If the body without list markers is directly present in rawSource, it is extractive
-  if (normalizeComparable(rawSource).includes(normalizedBody)) {
+  // 3. Body with heading matches quotes (when model quotes the heading along with the body)
+  if (heading) {
+    const withHeading = normalizeComparable(stripListMarkers(`${heading} ${body}`));
+    if (withHeading === normalizedQuotes) {
+      return;
+    }
+  }
+
+  // 4. Body without list markers is present in rawSource
+  if (normalizedRawSourceNoMarkers.includes(normalizedBody) || normalizedRawSource.includes(normalizedBody)) {
     return;
   }
 
-  // If quotes and body have whitespace or separator differences, check concatenated quotes
+  // 5. Concatenated quotes match body or body with heading
   const quotesConcatenated = normalizeComparable(quotes.map((q) => stripListMarkers(q)).join(' '));
   if (normalizedBody === quotesConcatenated) {
+    return;
+  }
+  if (heading) {
+    const withHeading = normalizeComparable(stripListMarkers(`${heading} ${body}`));
+    if (withHeading === quotesConcatenated) {
+      return;
+    }
+  }
+
+  // 6. Check paragraph-by-paragraph: each non-empty paragraph must be extractive from rawSource
+  const paragraphs = body
+    .split(/\n+/)
+    .map((p) => normalizeComparable(stripListMarkers(p)))
+    .filter((p) => p.length > 0);
+
+  if (
+    paragraphs.length > 0 &&
+    paragraphs.every((p) => normalizedRawSourceNoMarkers.includes(p) || normalizedRawSource.includes(p))
+  ) {
     return;
   }
 
