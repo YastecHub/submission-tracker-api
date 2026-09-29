@@ -44,6 +44,7 @@ model StudentAccount {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   announcementReads AnnouncementRead[]
+  pushSubscriptions StudentPushSubscription[]
 }
 
 model StudentRoster {
@@ -189,6 +190,13 @@ enum AnnouncementAiRunStatus {
   failed
 }
 
+enum NotificationOutboxStatus {
+  pending
+  processing
+  delivered
+  dead
+}
+
 model Announcement {
   id                      String                 @id @default(uuid())
   slug                    String                 @unique
@@ -221,6 +229,7 @@ model Announcement {
   reads                   AnnouncementRead[]
   aiRuns                  AnnouncementAiRun[]
   media                   AnnouncementMedia[]
+  notificationOutbox      NotificationOutbox[]
 
   @@index([status, isPinned, publishedAt])
   @@index([status, category, publishedAt])
@@ -308,6 +317,45 @@ model AnnouncementRead {
 
   @@unique([announcementId, studentId])
   @@index([studentId, lastReadAt])
+}
+
+model StudentPushSubscription {
+  id             String                    @id @default(uuid())
+  studentId      String
+  student        StudentAccount            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  endpoint       String                    @unique
+  p256dh         String
+  auth           String
+  expirationTime DateTime?
+  userAgent      String?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  lastSeenAt     DateTime                  @default(now())
+  outbox         NotificationOutbox[]
+
+  @@index([studentId, updatedAt])
+}
+
+model NotificationOutbox {
+  id                  String                    @id @default(uuid())
+  subscriptionId      String?
+  subscription        StudentPushSubscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  announcementId      String
+  announcement        Announcement              @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  announcementVersion Int
+  payload             Json
+  status              NotificationOutboxStatus  @default(pending)
+  attempts            Int                       @default(0)
+  availableAt         DateTime                  @default(now())
+  lockedAt            DateTime?
+  deliveredAt         DateTime?
+  lastError           String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@unique([subscriptionId, announcementId, announcementVersion])
+  @@index([status, availableAt, createdAt])
+  @@index([announcementId, announcementVersion])
 }
 
 model PaymentReceipt {

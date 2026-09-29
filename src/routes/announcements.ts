@@ -5,15 +5,19 @@ import {
   archiveAnnouncement,
   createAnnouncement,
   deleteAnnouncementMedia,
+  deleteStudentPushSubscription,
   getAnnouncementAdmin,
   getAnnouncementUnreadCount,
   getPublishedAnnouncement,
+  getStudentPushConfig,
+  getStudentPushSubscriptionStatus,
   listAnnouncementPaymentOptions,
   listAnnouncementsAdmin,
   listPublishedAnnouncements,
   markAnnouncementRead,
   organizeAnnouncement,
   publishAnnouncement,
+  saveStudentPushSubscription,
   updateAnnouncement,
   updateAnnouncementMedia,
   uploadAnnouncementMedia,
@@ -61,6 +65,65 @@ function handleMediaUpload(req: Request, res: Response, next: NextFunction): voi
     next();
   });
 }
+
+/**
+ * @openapi
+ * /api/bulletin/push/config:
+ *   get:
+ *     tags: [Nexium Bulletin]
+ *     summary: Get student push-notification configuration
+ *     security: [{ studentBearerAuth: [] }]
+ *     responses:
+ *       200: { description: Push configuration and public VAPID key }
+ * /api/bulletin/push/subscriptions/status:
+ *   post:
+ *     tags: [Nexium Bulletin]
+ *     summary: Check whether this browser subscription belongs to the signed-in student
+ *     security: [{ studentBearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [endpoint]
+ *             properties: { endpoint: { type: string, format: uri } }
+ *     responses:
+ *       200: { description: Current browser subscription status }
+ * /api/bulletin/push/subscriptions:
+ *   post:
+ *     tags: [Nexium Bulletin]
+ *     summary: Save or refresh a student browser push subscription
+ *     security: [{ studentBearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [subscription]
+ *             properties: { subscription: { $ref: '#/components/schemas/StudentPushSubscription' } }
+ *     responses:
+ *       201: { description: Subscription saved }
+ *   delete:
+ *     tags: [Nexium Bulletin]
+ *     summary: Disable Bulletin delivery to this browser for the signed-in student
+ *     security: [{ studentBearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [endpoint]
+ *             properties: { endpoint: { type: string, format: uri } }
+ *     responses:
+ *       200: { description: Subscription removed }
+ */
+router.get('/push/config', studentAuthMiddleware, getStudentPushConfig);
+router.post('/push/subscriptions/status', studentAuthMiddleware, getStudentPushSubscriptionStatus);
+router.post('/push/subscriptions', studentAuthMiddleware, saveStudentPushSubscription);
+router.delete('/push/subscriptions', studentAuthMiddleware, deleteStudentPushSubscription);
 
 /**
  * @openapi

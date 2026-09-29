@@ -18,6 +18,7 @@ import paymentReceiptRoutes from './src/routes/paymentReceipts';
 import transactionRoutes from './src/routes/transactions';
 import studentAuthRoutes from './src/routes/studentAuth';
 import announcementRoutes from './src/routes/announcements';
+import { startNotificationDeliveryWorker } from './src/modules/announcements/application/notificationDeliveryWorker';
 
 const app = express();
 
@@ -164,6 +165,8 @@ const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const HOST = process.env.HOST ?? '0.0.0.0';
 
 const server = app.listen(PORT, HOST);
+let stopNotificationWorker = () => {};
+server.on('close', () => stopNotificationWorker());
 
 server.on('error', (error) => {
   console.error(`Failed to bind API server on ${HOST}:${PORT}`, error);
@@ -185,6 +188,7 @@ server.on('listening', async () => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[32m● Connected\x1b[0m');
+    stopNotificationWorker = startNotificationDeliveryWorker();
   } catch (err: unknown) {
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[31m● Connection failed\x1b[0m');
     console.error('  ─────────────────────────────────────────');

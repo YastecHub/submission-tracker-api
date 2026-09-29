@@ -7,7 +7,7 @@ const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
 if (vapidPublicKey && vapidPrivateKey) {
   try {
     webpush.setVapidDetails(
-      process.env.VAPID_CONTACT ?? 'mailto:admin@submitit.app',
+      process.env.VAPID_CONTACT ?? 'mailto:admin@nexium.app',
       vapidPublicKey,
       vapidPrivateKey
     );
@@ -22,12 +22,29 @@ if (vapidPublicKey && vapidPrivateKey) {
 export async function sendPush(
   subscription: string,
   payload: { title: string; body: string; url?: string }
-): Promise<void> {
-  if (!pushEnabled) return;
+): Promise<PushSendResult> {
+  if (!pushEnabled) return { outcome: 'disabled', message: 'Push notifications are not configured' };
   try {
     await webpush.sendNotification(JSON.parse(subscription), JSON.stringify(payload));
+    return { outcome: 'delivered' };
   } catch (err) {
-    // Subscription may be expired — log but don't crash
-    console.error('Push notification failed:', err);
+    const statusCode = typeof err === 'object' && err && 'statusCode' in err
+      ? Number((err as { statusCode?: unknown }).statusCode)
+      : undefined;
+    const message = err instanceof Error ? err.message.slice(0, 500) : 'Push delivery failed';
+    if (statusCode === 404 || statusCode === 410) return { outcome: 'invalid', statusCode, message };
+    return { outcome: 'retry', statusCode, message };
   }
+}
+
+export type PushSendResult =
+  | { outcome: 'delivered' }
+  | { outcome: 'disabled' | 'invalid' | 'retry'; statusCode?: number; message: string };
+
+export function isPushConfigured(): boolean {
+  return pushEnabled;
+}
+
+export function getVapidPublicKey(): string | null {
+  return pushEnabled && vapidPublicKey ? vapidPublicKey : null;
 }

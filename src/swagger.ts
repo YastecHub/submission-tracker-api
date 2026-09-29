@@ -53,6 +53,22 @@ const options: swaggerJsdoc.Options = {
             fullName: { type: 'string' },
           },
         },
+        StudentPushSubscription: {
+          type: 'object',
+          required: ['endpoint', 'keys'],
+          properties: {
+            endpoint: { type: 'string', format: 'uri', maxLength: 2048 },
+            expirationTime: { type: 'number', nullable: true },
+            keys: {
+              type: 'object',
+              required: ['p256dh', 'auth'],
+              properties: {
+                p256dh: { type: 'string' },
+                auth: { type: 'string' },
+              },
+            },
+          },
+        },
         SubmissionEvent: {
           type: 'object',
           properties: {

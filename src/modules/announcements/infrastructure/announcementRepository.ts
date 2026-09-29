@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import prisma from '../../../lib/prisma';
 import { announcementSectionIds } from '../domain/announcementMedia';
+import { announcementNotificationPayload, notificationPayloadJson } from '../domain/announcementNotification';
 import { announcementMediaSelect, announcementMediaSnapshot } from './announcementMediaRepository';
 
 export interface AnnouncementWriteData {
@@ -215,8 +216,21 @@ export class AnnouncementRepository {
           createdBy: userId,
         },
       });
+      const subscriptions = await tx.studentPushSubscription.findMany({ select: { id: true } });
+      if (subscriptions.length > 0) {
+        const notification = notificationPayloadJson(announcementNotificationPayload(published));
+        await tx.notificationOutbox.createMany({
+          data: subscriptions.map((subscription) => ({
+            subscriptionId: subscription.id,
+            announcementId: published.id,
+            announcementVersion: published.version,
+            payload: notification,
+          })),
+          skipDuplicates: true,
+        });
+      }
       return tx.announcement.findUniqueOrThrow({ where: { id }, include: staffDetailInclude });
-    });
+    }, { timeout: 15_000 });
   }
 
   async archiveWithVersion(id: string, expectedVersion: number, userId: string) {

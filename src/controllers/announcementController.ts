@@ -1,6 +1,7 @@
 import { announcementService } from '../modules/announcements/application/announcementService';
 import { announcementAiService } from '../modules/announcements/application/announcementAiService';
 import { announcementMediaService } from '../modules/announcements/application/announcementMediaService';
+import { studentPushSubscriptionService } from '../modules/announcements/application/studentPushSubscriptionService';
 import { created, ok } from '../shared/http/controller';
 import { routeParam } from '../shared/http/param';
 
@@ -56,6 +57,22 @@ export const deleteAnnouncementMedia = ok((req) =>
     req.body,
     req.user!,
   )
+);
+
+export const getStudentPushConfig = ok(() =>
+  studentPushSubscriptionService.config()
+);
+
+export const getStudentPushSubscriptionStatus = ok((req) =>
+  studentPushSubscriptionService.status(req.student!.id, req.body)
+);
+
+export const saveStudentPushSubscription = created((req) =>
+  studentPushSubscriptionService.save(req.student!.id, req.body, req.get('user-agent'))
+);
+
+export const deleteStudentPushSubscription = ok((req) =>
+  studentPushSubscriptionService.remove(req.student!.id, req.body)
 );
 
 export const listPublishedAnnouncements = ok((req) =>
