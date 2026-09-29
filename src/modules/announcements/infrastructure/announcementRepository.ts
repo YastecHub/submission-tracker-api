@@ -21,6 +21,7 @@ export interface AnnouncementWriteData {
   contributorName: string | null;
   contributorCredit: string | null;
   isPinned: boolean;
+  requiresAcknowledgement: boolean;
   paymentEventId: string | null;
 }
 
@@ -99,6 +100,7 @@ export class AnnouncementRepository {
           priority: true,
           status: true,
           isPinned: true,
+          requiresAcknowledgement: true,
           version: true,
           publishedAt: true,
           updatedAt: true,
@@ -177,6 +179,36 @@ export class AnnouncementRepository {
             createdBy: params.data.updatedBy,
           },
         });
+        const subscriptions = await tx.studentPushSubscription.findMany({ select: { id: true } });
+        if (subscriptions.length > 0) {
+          const notification = notificationPayloadJson(announcementNotificationPayload(updated, {
+            isUpdate: true,
+            changeNote: params.changeNote,
+          }));
+          await tx.notificationOutbox.createMany({
+            data: subscriptions.map((subscription) => ({
+              subscriptionId: subscription.id,
+              announcementId: updated.id,
+              announcementVersion: updated.version,
+              payload: notification,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      } else if (updated.status === 'published') {
+        const subscriptions = await tx.studentPushSubscription.findMany({ select: { id: true } });
+        if (subscriptions.length > 0) {
+          const notification = notificationPayloadJson(announcementNotificationPayload(updated));
+          await tx.notificationOutbox.createMany({
+            data: subscriptions.map((subscription) => ({
+              subscriptionId: subscription.id,
+              announcementId: updated.id,
+              announcementVersion: updated.version,
+              payload: notification,
+            })),
+            skipDuplicates: true,
+          });
+        }
       }
       await this.recordAiAcceptance(tx, params.aiAcceptance, updated.id);
       return tx.announcement.findUniqueOrThrow({ where: { id: params.id }, include: staffDetailInclude });
@@ -387,6 +419,164 @@ export class AnnouncementRepository {
       });
       return { id, version: announcement.version, read: true };
     });
+  }
+
+  async acknowledge(id: string, studentId: string) {
+    return prisma.$transaction(async (tx) => {
+      const announcement = await tx.announcement.findFirst({
+        where: { id, status: 'published', requiresAcknowledgement: true },
+        select: { id: true, version: true },
+      });
+      if (!announcement) return null;
+      const result = await tx.announcementRead.upsert({
+        where: { announcementId_studentId: { announcementId: id, studentId } },
+        create: {
+          announcementId: id,
+          studentId,
+          lastReadVersion: announcement.version,
+          acknowledgedVersion: announcement.version,
+          acknowledgedAt: new Date(),
+        },
+        update: {
+          lastReadVersion: announcement.version,
+          acknowledgedVersion: announcement.version,
+          acknowledgedAt: new Date(),
+          lastReadAt: new Date(),
+        },
+      });
+      return { id, version: announcement.version, acknowledged: true };
+    });
+  }
+
+  async getAnalytics(id: string) {
+    const announcement = await prisma.announcement.findUnique({
+      where: { id },
+      select: { id: true, version: true, requiresAcknowledgement: true, status: true },
+    });
+    if (!announcement) return null;
+
+    const [
+      totalReads,
+      totalAcknowledged,
+      totalRegisteredStudents,
+      pushDelivered,
+      pushPending,
+      pushFailed,
+    ] = await Promise.all([
+      prisma.announcementRead.count({ where: { announcementId: id } }),
+      prisma.announcementRead.count({
+        where: {
+          announcementId: id,
+          acknowledgedVersion: { gte: announcement.version },
+        },
+      }),
+      prisma.studentAccount.count(),
+      prisma.notificationOutbox.count({ where: { announcementId: id, status: 'delivered' } }),
+      prisma.notificationOutbox.count({ where: { announcementId: id, status: { in: ['pending', 'processing'] } } }),
+      prisma.notificationOutbox.count({ where: { announcementId: id, status: 'dead' } }),
+    ]);
+
+    return {
+      totalReads,
+      totalAcknowledged,
+      uniqueReaders: totalReads,
+      totalRegisteredStudents,
+      readRate: totalRegisteredStudents > 0 ? totalReads / totalRegisteredStudents : 0,
+      acknowledgementRate: totalReads > 0 ? totalAcknowledged / totalReads : 0,
+      classAcknowledgementRate: totalRegisteredStudents > 0 ? totalAcknowledged / totalRegisteredStudents : 0,
+      pushStats: {
+        delivered: pushDelivered,
+        pending: pushPending,
+        failed: pushFailed,
+      },
+      version: announcement.version,
+      requiresAcknowledgement: announcement.requiresAcknowledgement,
+      status: announcement.status,
+    };
+  }
+
+  async getOutstandingStudents(id: string, params: { skip: number; take: number; search?: string }) {
+    const announcement = await prisma.announcement.findUnique({
+      where: { id },
+      select: { id: true, version: true, requiresAcknowledgement: true },
+    });
+    if (!announcement || !announcement.requiresAcknowledgement) return null;
+
+    const where: Prisma.StudentAccountWhereInput = {
+      ...(params.search
+        ? {
+            OR: [
+              { fullName: { contains: params.search, mode: 'insensitive' } },
+              { matricNumber: { contains: params.search, mode: 'insensitive' } },
+              { email: { contains: params.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      AND: [
+        {
+          OR: [
+            { announcementReads: { none: { announcementId: id } } },
+            {
+              announcementReads: {
+                some: {
+                  announcementId: id,
+                  OR: [
+                    { acknowledgedVersion: null },
+                    { acknowledgedVersion: { lt: announcement.version } },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const [students, total] = await Promise.all([
+      prisma.studentAccount.findMany({
+        where,
+        orderBy: [{ fullName: 'asc' }],
+        skip: params.skip,
+        take: params.take,
+        select: {
+          id: true,
+          matricNumber: true,
+          fullName: true,
+          email: true,
+          announcementReads: {
+            where: { announcementId: id },
+            select: {
+              lastReadVersion: true,
+              acknowledgedVersion: true,
+              firstReadAt: true,
+              lastReadAt: true,
+              acknowledgedAt: true,
+            },
+          },
+        },
+      }),
+      prisma.studentAccount.count({ where }),
+    ]);
+
+    return {
+      students: students.map((s) => {
+        const read = s.announcementReads[0] ?? null;
+        return {
+          id: s.id,
+          matricNumber: s.matricNumber,
+          fullName: s.fullName,
+          email: s.email,
+          hasOpened: Boolean(read),
+          lastReadVersion: read?.lastReadVersion ?? null,
+          acknowledgedVersion: read?.acknowledgedVersion ?? null,
+          firstReadAt: read?.firstReadAt ?? null,
+          lastReadAt: read?.lastReadAt ?? null,
+          acknowledgedAt: read?.acknowledgedAt ?? null,
+        };
+      }),
+      total,
+      version: announcement.version,
+    };
   }
 
   private async recordAiAcceptance(

@@ -8,7 +8,7 @@ export interface StudentPushSubscriptionInput {
 }
 
 function key(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length < 8 || value.length > 512 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+  if (typeof value !== 'string' || value.length < 8 || value.length > 512 || !/^[A-Za-z0-9+/=_-]+$/.test(value)) {
     throw badRequest(`${label} is invalid`);
   }
   return value;

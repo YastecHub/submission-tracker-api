@@ -90,3 +90,15 @@ export const getAnnouncementUnreadCount = ok((req) =>
 export const markAnnouncementRead = ok((req) =>
   announcementService.markRead(routeParam(req.params.id), req.student!.id)
 );
+
+export const acknowledgeAnnouncement = ok((req) =>
+  announcementService.acknowledge(routeParam(req.params.id), req.student!.id)
+);
+
+export const getAnnouncementAnalytics = ok((req) =>
+  announcementService.getAnalytics(routeParam(req.params.id))
+);
+
+export const getAnnouncementOutstandingStudents = ok((req) =>
+  announcementService.getOutstandingStudents(routeParam(req.params.id), req.query as Record<string, unknown>)
+);

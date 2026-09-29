@@ -69,6 +69,43 @@ export class NotificationOutboxRepository {
     });
   }
 
+  async cleanupInvalidSubscriptions(retentionDays = 30): Promise<{ removedSubscriptions: number; prunedOutboxRows: number }> {
+    const now = new Date();
+    const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+    return prisma.$transaction(async (tx) => {
+      const expired = await tx.studentPushSubscription.findMany({
+        where: { expirationTime: { not: null, lte: now } },
+        select: { id: true },
+      });
+
+      let removedSubscriptions = 0;
+      if (expired.length > 0) {
+        const expiredIds = expired.map((s) => s.id);
+        await tx.notificationOutbox.updateMany({
+          where: { subscriptionId: { in: expiredIds }, status: { in: ['pending', 'processing'] } },
+          data: { status: 'dead', lockedAt: null, lastError: 'Notification subscription expired' },
+        });
+        const deleteRes = await tx.studentPushSubscription.deleteMany({
+          where: { id: { in: expiredIds } },
+        });
+        removedSubscriptions = deleteRes.count;
+      }
+
+      const pruneRes = await tx.notificationOutbox.deleteMany({
+        where: {
+          status: { in: ['delivered', 'dead'] },
+          updatedAt: { lt: cutoffDate },
+        },
+      });
+
+      return {
+        removedSubscriptions,
+        prunedOutboxRows: pruneRes.count,
+      };
+    });
+  }
+
   private transition(
     id: string,
     status: NotificationOutboxStatus,

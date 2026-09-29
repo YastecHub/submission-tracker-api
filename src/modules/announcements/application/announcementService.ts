@@ -47,6 +47,7 @@ interface WriteInput {
   contributorName?: unknown;
   contributorCredit?: unknown;
   isPinned?: unknown;
+  requiresAcknowledgement?: unknown;
   paymentEventId?: unknown;
   expectedVersion?: unknown;
   changeNote?: unknown;
@@ -106,6 +107,7 @@ function toWriteData(input: WriteInput): AnnouncementWriteData {
     contributorName: optionalText(input.contributorName, 150, 'Contributor name'),
     contributorCredit: optionalText(input.contributorCredit, 240, 'Contributor credit'),
     isPinned: input.isPinned === true,
+    requiresAcknowledgement: input.requiresAcknowledgement === true,
     paymentEventId,
   };
 }
@@ -321,6 +323,31 @@ export class AnnouncementService {
     const result = await this.repository.markRead(id, studentId);
     if (!result) throw notFound('Announcement not found');
     return result;
+  }
+
+  async acknowledge(id: string, studentId: string) {
+    const result = await this.repository.acknowledge(id, studentId);
+    if (!result) throw notFound('Announcement not found or does not require acknowledgement');
+    return result;
+  }
+
+  async getAnalytics(id: string) {
+    const result = await this.repository.getAnalytics(id);
+    if (!result) throw notFound('Announcement not found');
+    return result;
+  }
+
+  async getOutstandingStudents(id: string, query: { page?: unknown; limit?: unknown; search?: unknown }) {
+    const { page, limit, skip } = pageValues(query.page, query.limit);
+    const search = cleanSearch(query.search);
+    const result = await this.repository.getOutstandingStudents(id, { skip, take: limit, search });
+    if (!result) throw notFound('Announcement not found or does not require acknowledgement');
+    return {
+      ...result,
+      page,
+      limit,
+      totalPages: Math.ceil(result.total / limit),
+    };
   }
 
   private async validatePayment(paymentEventId: string | null) {

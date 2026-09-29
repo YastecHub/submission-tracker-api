@@ -3,15 +3,18 @@ import {
   notificationOutboxRepository,
   NotificationOutboxRepository,
 } from '../infrastructure/notificationOutboxRepository';
-import { isPushConfigured, sendPush } from '../../../utils/pushNotifier';
+import { isPushConfigured, sendPush, type PushSendResult } from '../../../utils/pushNotifier';
 
 const MAX_ATTEMPTS = 5;
 const BATCH_SIZE = 25;
 const DEFAULT_INTERVAL_MS = 15_000;
+const CLEANUP_INTERVAL_MS = 60 * 60_000; // 1 hour
 
-function retryAt(attempts: number): Date {
-  const delayMinutes = Math.min(360, 2 ** Math.max(0, attempts - 1));
-  return new Date(Date.now() + delayMinutes * 60_000);
+export function retryAt(attempts: number): Date {
+  const baseDelayMinutes = Math.min(360, 2 ** Math.max(0, attempts - 1));
+  const jitterFactor = 0.8 + Math.random() * 0.4; // 80% to 120% jitter
+  const delayMinutes = baseDelayMinutes * jitterFactor;
+  return new Date(Date.now() + Math.round(delayMinutes * 60_000));
 }
 
 function payload(value: unknown): AnnouncementNotificationPayload | null {
@@ -26,17 +29,40 @@ function payload(value: unknown): AnnouncementNotificationPayload | null {
 export class NotificationDeliveryWorker {
   private running = false;
 
-  constructor(private readonly repository: NotificationOutboxRepository) {}
+  constructor(
+    private readonly repository: NotificationOutboxRepository,
+    private readonly pushSender: (subscription: string, payload: AnnouncementNotificationPayload) => Promise<PushSendResult> = sendPush,
+  ) {}
 
   async runOnce(): Promise<number> {
     if (this.running || !isPushConfigured()) return 0;
     this.running = true;
     try {
       const rows = await this.repository.claim(BATCH_SIZE);
-      await Promise.all(rows.map((row) => this.deliver(row)));
+      await Promise.all(
+        rows.map(async (row) => {
+          try {
+            await this.deliver(row);
+          } catch (error) {
+            console.error(
+              `[bulletin delivery] worker error for outbox row ${row.id}:`,
+              error instanceof Error ? error.message : error,
+            );
+          }
+        }),
+      );
       return rows.length;
     } finally {
       this.running = false;
+    }
+  }
+
+  async cleanup(retentionDays?: number) {
+    try {
+      return await this.repository.cleanupInvalidSubscriptions(retentionDays);
+    } catch (error) {
+      console.error('[bulletin notifications] cleanup failed:', error instanceof Error ? error.message : error);
+      return { removedSubscriptions: 0, prunedOutboxRows: 0 };
     }
   }
 
@@ -53,11 +79,14 @@ export class NotificationDeliveryWorker {
       return;
     }
 
-    const result = await sendPush(JSON.stringify({
-      endpoint: subscription.endpoint,
-      expirationTime: subscription.expirationTime?.getTime() ?? null,
-      keys: { p256dh: subscription.p256dh, auth: subscription.auth },
-    }), notification);
+    const result = await this.pushSender(
+      JSON.stringify({
+        endpoint: subscription.endpoint,
+        expirationTime: subscription.expirationTime?.getTime() ?? null,
+        keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+      }),
+      notification,
+    );
 
     if (result.outcome === 'delivered') {
       await this.repository.complete(row.id);
@@ -80,11 +109,28 @@ export function startNotificationDeliveryWorker(): () => void {
   }
   const configured = Number(process.env.NOTIFICATION_WORKER_INTERVAL_MS);
   const intervalMs = Number.isFinite(configured) && configured >= 5_000 ? configured : DEFAULT_INTERVAL_MS;
-  const run = () => notificationDeliveryWorker.runOnce().catch((error) => {
-    console.error('[bulletin notifications] delivery cycle failed:', error instanceof Error ? error.message : error);
-  });
+
+  const run = () =>
+    notificationDeliveryWorker.runOnce().catch((error) => {
+      console.error('[bulletin notifications] delivery cycle failed:', error instanceof Error ? error.message : error);
+    });
+
+  const runCleanup = () =>
+    notificationDeliveryWorker.cleanup().catch((error) => {
+      console.error('[bulletin notifications] periodic cleanup failed:', error instanceof Error ? error.message : error);
+    });
+
   void run();
+  void runCleanup();
+
   const timer = setInterval(run, intervalMs);
   timer.unref();
-  return () => clearInterval(timer);
+
+  const cleanupTimer = setInterval(runCleanup, CLEANUP_INTERVAL_MS);
+  cleanupTimer.unref();
+
+  return () => {
+    clearInterval(timer);
+    clearInterval(cleanupTimer);
+  };
 }

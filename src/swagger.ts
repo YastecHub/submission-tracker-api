@@ -291,6 +291,38 @@ const options: swaggerJsdoc.Options = {
             audit: { type: 'object', properties: { provider: { type: 'string' }, model: { type: 'string' }, promptVersion: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' } } },
           },
         },
+        AnnouncementAnalytics: {
+          type: 'object',
+          properties: {
+            totalReads: { type: 'integer' },
+            totalAcknowledged: { type: 'integer' },
+            uniqueReaders: { type: 'integer' },
+            totalRegisteredStudents: { type: 'integer' },
+            readRate: { type: 'number', format: 'float' },
+            acknowledgementRate: { type: 'number', format: 'float' },
+          },
+        },
+        OutstandingStudent: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            matricNumber: { type: 'string' },
+            fullName: { type: 'string' },
+            email: { type: 'string', format: 'email' },
+            lastReadVersion: { type: 'integer' },
+            acknowledgedVersion: { type: 'integer', nullable: true },
+            firstReadAt: { type: 'string', format: 'date-time' },
+            lastReadAt: { type: 'string', format: 'date-time' },
+            acknowledgedAt: { type: 'string', format: 'date-time', nullable: true },
+          },
+        },
+        AnnouncementOutstandingStudentsResponse: {
+          type: 'object',
+          properties: {
+            students: { type: 'array', items: { $ref: '#/components/schemas/OutstandingStudent' } },
+            total: { type: 'integer' },
+          },
+        },
         Error: {
           type: 'object',
           properties: {

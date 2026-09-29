@@ -2,12 +2,15 @@ import { NextFunction, Request, Response, Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
 import {
+  acknowledgeAnnouncement,
   archiveAnnouncement,
   createAnnouncement,
   deleteAnnouncementMedia,
   deleteStudentPushSubscription,
   getAnnouncementAdmin,
+  getAnnouncementOutstandingStudents,
   getAnnouncementUnreadCount,
+  getAnnouncementAnalytics,
   getPublishedAnnouncement,
   getStudentPushConfig,
   getStudentPushSubscriptionStatus,
@@ -193,6 +196,52 @@ router.get('/feed/:slug', studentAuthMiddleware, getPublishedAnnouncement);
  *       404: { description: Announcement not found }
  */
 router.post('/feed/:id/read', studentAuthMiddleware, markAnnouncementRead);
+
+/**
+ * @openapi
+ * /api/bulletin/feed/{id}/acknowledge:
+ *   post:
+ *     tags: [Nexium Bulletin]
+ *     summary: Acknowledge an announcement that requires acknowledgement
+ *     security: [{ studentBearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Acknowledgement recorded }
+ *       404: { description: Announcement not found or does not require acknowledgement }
+ */
+router.post('/feed/:id/acknowledge', studentAuthMiddleware, acknowledgeAnnouncement);
+
+/**
+ * @openapi
+ * /api/bulletin/admin/{id}/analytics:
+ *   get:
+ *     tags: [Nexium Bulletin Staff]
+ *     summary: Get aggregate read/acknowledgement analytics for an announcement
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Analytics including read rate and acknowledgement rate }
+ *       404: { description: Announcement not found }
+ */
+/**
+ * @openapi
+ * /api/bulletin/admin/{id}/outstanding:
+ *   get:
+ *     tags: [Nexium Bulletin Staff]
+ *     summary: List students who have not acknowledged a critical announcement
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *       - { in: query, name: page, schema: { type: integer, minimum: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 50 } }
+ *     responses:
+ *       200: { description: Paginated list of students with acknowledgement status }
+ *       404: { description: Announcement not found or does not require acknowledgement }
+ */
+router.get('/admin/:id/analytics', authMiddleware, requireStaff, getAnnouncementAnalytics);
+router.get('/admin/:id/outstanding', authMiddleware, requireStaff, getAnnouncementOutstandingStudents);
 
 router.get('/admin/payment-options', authMiddleware, requireStaff, listAnnouncementPaymentOptions);
 

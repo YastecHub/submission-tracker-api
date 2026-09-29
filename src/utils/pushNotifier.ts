@@ -25,7 +25,7 @@ export async function sendPush(
 ): Promise<PushSendResult> {
   if (!pushEnabled) return { outcome: 'disabled', message: 'Push notifications are not configured' };
   try {
-    await webpush.sendNotification(JSON.parse(subscription), JSON.stringify(payload));
+    await webpush.sendNotification(JSON.parse(subscription), JSON.stringify(payload), { timeout: 10_000 });
     return { outcome: 'delivered' };
   } catch (err) {
     const statusCode = typeof err === 'object' && err && 'statusCode' in err
