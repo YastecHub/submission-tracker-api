@@ -17,6 +17,11 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+      JWT_SECRET: ci_secret_key_needs_to_be_at_least_32_characters_long
+      NODE_ENV: test
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -32,12 +37,31 @@ jobs:
 
       - name: Validate Prisma schema
         run: npx prisma validate
-        env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
-          DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
 
       - name: Run tests
         run: npm test
 
       - name: Build production server
         run: npm run build
+
+  deploy-heroku:
+    needs: verify
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Deploy to Heroku (if secrets configured)
+        if: ${{ env.HEROKU_API_KEY != '' && env.HEROKU_APP_NAME != '' }}
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+        run: |
+          git remote add heroku "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP_NAME}.git"
+          git push heroku master:main --force || git push heroku master --force
