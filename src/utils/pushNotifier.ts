@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import logger from '../lib/logger';
 
 let pushEnabled = false;
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
@@ -13,10 +14,12 @@ if (vapidPublicKey && vapidPrivateKey) {
     );
     pushEnabled = true;
   } catch (error) {
-    console.warn('[push] Invalid VAPID configuration; push notifications are disabled.', error instanceof Error ? error.message : 'Unknown configuration error');
+    logger.warn('[push] Invalid VAPID configuration; push notifications are disabled.', {
+      error: error instanceof Error ? error.message : 'Unknown configuration error',
+    });
   }
 } else if (vapidPublicKey || vapidPrivateKey) {
-  console.warn('[push] Incomplete VAPID configuration; push notifications are disabled.');
+  logger.warn('[push] Incomplete VAPID configuration; push notifications are disabled.');
 }
 
 export async function sendPush(

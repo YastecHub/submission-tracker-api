@@ -19,6 +19,7 @@ import transactionRoutes from './src/routes/transactions';
 import studentAuthRoutes from './src/routes/studentAuth';
 import announcementRoutes from './src/routes/announcements';
 import { startNotificationDeliveryWorker } from './src/modules/announcements/application/notificationDeliveryWorker';
+import logger, { requestLogger } from './src/lib/logger';
 
 const app = express();
 
@@ -28,6 +29,9 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 
 // Render forwards the original client IP through one trusted proxy.
 app.set('trust proxy', 1);
+
+// HTTP request logger using winston
+app.use(requestLogger);
 
 function getAllowedOrigins(): string[] {
   const configured = [process.env.CLIENT_URL, process.env.CORS_ORIGINS]
@@ -69,7 +73,7 @@ app.use(
         return;
       }
 
-      console.warn(`[cors] blocked origin: ${origin}`);
+      logger.warn(`[cors] blocked origin: ${origin}`);
       callback(null, false);
     },
     credentials: true,
@@ -156,9 +160,25 @@ app.get('/api/warmup', async (req: Request, res: Response) => {
 });
 
 // Global error handler
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error(err.stack);
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  logger.error(`[Unhandled Error] ${req.method} ${req.originalUrl}: ${err.message}`, {
+    stack: err.stack,
+    method: req.method,
+    url: req.originalUrl,
+    ip: req.ip,
+  });
   res.status(500).json({ error: 'Internal server error' });
+});
+
+// Uncaught exception and unhandled rejection logging
+process.on('uncaughtException', (err) => {
+  logger.error(`Uncaught Exception: ${err.message}`, { stack: err.stack });
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error(`Unhandled Rejection: ${reason instanceof Error ? reason.message : String(reason)}`, {
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
 });
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
@@ -169,7 +189,7 @@ let stopNotificationWorker = () => {};
 server.on('close', () => stopNotificationWorker());
 
 server.on('error', (error) => {
-  console.error(`Failed to bind API server on ${HOST}:${PORT}`, error);
+  logger.error(`Failed to bind API server on ${HOST}:${PORT}`, { error });
   process.exitCode = 1;
 });
 
@@ -188,12 +208,14 @@ server.on('listening', async () => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[32m● Connected\x1b[0m');
+    logger.info(`NEXIUM API server listening on ${base} [DB Connected]`);
     stopNotificationWorker = startNotificationDeliveryWorker();
   } catch (err: unknown) {
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[31m● Connection failed\x1b[0m');
     console.error('  ─────────────────────────────────────────');
     console.error('  \x1b[31mDiagnostics:\x1b[0m');
     console.error(`  DATABASE_URL: ${process.env.DATABASE_URL ? '✓ Set' : '✗ Not set'}`);
+    logger.error('Database connection failed on startup', { error: err });
     if (err instanceof Error) {
       const lines = err.message.split('\n');
       lines.forEach(line => console.error(`  \x1b[31m${line.trim()}\x1b[0m`));

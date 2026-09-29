@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { randomInt } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { AppError, badRequest, notFound } from '../../../shared/errors/AppError';
+import logger from '../../../lib/logger';
 import { sendStudentRegistrationOtp } from '../../../utils/mailer';
 import { studentAccountRepository, StudentAccountRepository } from '../infrastructure/studentAccountRepository';
 import { emailReflectsStudentName } from '../domain/studentIdentity';
@@ -70,7 +71,7 @@ export class StudentAuthService {
       await sendStudentRegistrationOtp(record.fullName, email, code);
     } catch (error) {
       await this.students.deleteRegistrationOtp(matricNumber);
-      console.error('[student registration email]', error);
+      logger.error('[student registration email] Failed to send OTP:', { error, email, matricNumber });
       throw new AppError(503, 'We could not send the verification email. Please try again later.');
     }
     return { message: 'Verification code sent', expiresInSeconds: OTP_LIFETIME_MS / 1000 };

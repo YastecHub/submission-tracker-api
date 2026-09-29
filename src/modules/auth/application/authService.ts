@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { UserRole } from '@prisma/client';
 import { badRequest, forbidden, notFound, AppError } from '../../../shared/errors/AppError';
+import logger from '../../../lib/logger';
 import { sendWelcomeEmail } from '../../../utils/mailer';
 import { userRepository, UserRepository } from '../infrastructure/userRepository';
 import { canCreateStaffAccount } from '../domain/staffAccess';
@@ -31,7 +32,7 @@ export class AuthService {
       { expiresIn: '7d' }
     );
 
-    this.handleFirstLogin(user).catch((err) => console.error('[welcome email]', err));
+    this.handleFirstLogin(user).catch((err) => logger.error('[welcome email] Failed to send first login email:', { error: err, userId: user.id }));
     return { token, user: safeUser(user) };
   }
 

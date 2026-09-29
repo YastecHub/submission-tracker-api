@@ -1,8 +1,9 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { Readable } from 'stream';
+import logger from './logger';
 
 if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-  console.warn('[cloudinary] WARNING: CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET env vars are not set. Image uploads will fail.');
+  logger.warn('[cloudinary] WARNING: CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET env vars are not set. Image uploads will fail.');
 }
 
 cloudinary.config({
@@ -89,7 +90,7 @@ export async function destroyImage(publicId: string): Promise<void> {
   try {
     await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
   } catch (err) {
-    console.warn(`[cloudinary] failed to destroy ${publicId}:`, err);
+    logger.warn(`[cloudinary] failed to destroy ${publicId}:`, { error: err });
   }
 }
 

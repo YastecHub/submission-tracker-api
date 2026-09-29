@@ -4,6 +4,7 @@ import { generateQR } from '../../../utils/qrGenerator';
 import { exportPaymentReceipts } from '../../../utils/excelExporter';
 import { checkReceiptAmountInBackground } from '../../../utils/receiptAmountChecker';
 import { AppError, badRequest, forbidden, notFound } from '../../../shared/errors/AppError';
+import logger from '../../../lib/logger';
 import { paymentReceiptRepository, PaymentReceiptRepository } from '../infrastructure/paymentReceiptRepository';
 import { cacheDeletePrefix } from '../../../utils/cache';
 
@@ -56,7 +57,7 @@ export class PaymentReceiptService {
       responseReceipt = await this.repository.updateTicketQrCode(receipt.id, await generateQR(receipt.id));
     }
 
-    void checkReceiptAmountInBackground({ receiptId: receipt.id, receiptUrl: uploaded.url, expectedAmount: event.amount }).catch((err) => console.error('[receipt amount check]', err));
+    void checkReceiptAmountInBackground({ receiptId: receipt.id, receiptUrl: uploaded.url, expectedAmount: event.amount }).catch((err) => logger.error('[receipt amount check] Background check failed:', { error: err, receiptId: receipt.id }));
     return { receipt: responseReceipt };
   }
 

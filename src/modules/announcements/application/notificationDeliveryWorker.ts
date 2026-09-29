@@ -4,6 +4,7 @@ import {
   NotificationOutboxRepository,
 } from '../infrastructure/notificationOutboxRepository';
 import { isPushConfigured, sendPush, type PushSendResult } from '../../../utils/pushNotifier';
+import logger from '../../../lib/logger';
 
 const MAX_ATTEMPTS = 5;
 const BATCH_SIZE = 25;
@@ -44,9 +45,9 @@ export class NotificationDeliveryWorker {
           try {
             await this.deliver(row);
           } catch (error) {
-            console.error(
-              `[bulletin delivery] worker error for outbox row ${row.id}:`,
-              error instanceof Error ? error.message : error,
+            logger.error(
+              `[bulletin delivery] worker error for outbox row ${row.id}: ${error instanceof Error ? error.message : String(error)}`,
+              { rowId: row.id, error },
             );
           }
         }),
@@ -61,7 +62,7 @@ export class NotificationDeliveryWorker {
     try {
       return await this.repository.cleanupInvalidSubscriptions(retentionDays);
     } catch (error) {
-      console.error('[bulletin notifications] cleanup failed:', error instanceof Error ? error.message : error);
+      logger.error('[bulletin notifications] cleanup failed:', { error: error instanceof Error ? error.message : error });
       return { removedSubscriptions: 0, prunedOutboxRows: 0 };
     }
   }
@@ -104,7 +105,7 @@ export const notificationDeliveryWorker = new NotificationDeliveryWorker(notific
 
 export function startNotificationDeliveryWorker(): () => void {
   if (!isPushConfigured()) {
-    console.warn('[bulletin notifications] VAPID is not configured; delivery worker is disabled.');
+    logger.warn('[bulletin notifications] VAPID is not configured; delivery worker is disabled.');
     return () => {};
   }
   const configured = Number(process.env.NOTIFICATION_WORKER_INTERVAL_MS);
@@ -112,12 +113,12 @@ export function startNotificationDeliveryWorker(): () => void {
 
   const run = () =>
     notificationDeliveryWorker.runOnce().catch((error) => {
-      console.error('[bulletin notifications] delivery cycle failed:', error instanceof Error ? error.message : error);
+      logger.error('[bulletin notifications] delivery cycle failed:', { error: error instanceof Error ? error.message : error });
     });
 
   const runCleanup = () =>
     notificationDeliveryWorker.cleanup().catch((error) => {
-      console.error('[bulletin notifications] periodic cleanup failed:', error instanceof Error ? error.message : error);
+      logger.error('[bulletin notifications] periodic cleanup failed:', { error: error instanceof Error ? error.message : error });
     });
 
   const initialTimer = setTimeout(run, 2_000);
