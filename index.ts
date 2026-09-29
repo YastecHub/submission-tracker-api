@@ -161,6 +161,7 @@ app.get('/api/warmup', async (req: Request, res: Response) => {
 
 // Global error handler
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  res.locals.__unhandledErrorLogged = true;
   logger.error(`[Unhandled Error] ${req.method} ${req.originalUrl}: ${err.message}`, {
     stack: err.stack,
     method: req.method,
@@ -188,10 +189,27 @@ const server = app.listen(PORT, HOST);
 let stopNotificationWorker = () => {};
 server.on('close', () => stopNotificationWorker());
 
-server.on('error', (error) => {
-  logger.error(`Failed to bind API server on ${HOST}:${PORT}`, { error });
-  process.exitCode = 1;
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EADDRINUSE') {
+    logger.error(`Port ${PORT} is already in use by another process. Please close the conflicting process or change PORT in .env.`);
+    process.exit(1);
+  }
+  logger.error(`Failed to bind API server on ${HOST}:${PORT}: ${error.message}`, { error });
+  process.exit(1);
 });
+
+const shutdown = (signal: string) => {
+  logger.info(`Received ${signal}. Shutting down API server gracefully...`);
+  stopNotificationWorker();
+  server.close(() => {
+    logger.info('API server closed cleanly.');
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 3000).unref();
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 server.on('listening', async () => {
   const base = process.env.PUBLIC_API_URL ?? process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${PORT}`;
