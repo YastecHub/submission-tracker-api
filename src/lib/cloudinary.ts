@@ -2,7 +2,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { Readable } from 'stream';
 
 if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-  console.warn('[cloudinary] WARNING: CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET env vars are not set. Receipt uploads will fail.');
+  console.warn('[cloudinary] WARNING: CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET env vars are not set. Image uploads will fail.');
 }
 
 cloudinary.config({
@@ -25,6 +25,64 @@ export async function uploadImageBuffer(
     );
     Readable.from(buffer).pipe(stream);
   });
+}
+
+export interface BulletinImageUpload {
+  publicId: string;
+  url: string;
+  thumbnailUrl: string;
+  width: number;
+  height: number;
+  bytes: number;
+  format: string;
+}
+
+export async function uploadBulletinImage(buffer: Buffer): Promise<BulletinImageUpload> {
+  const uploaded = await new Promise<{
+    publicId: string;
+    width: number;
+    height: number;
+    bytes: number;
+    format: string;
+  }>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'nexium-bulletin',
+        resource_type: 'image',
+        unique_filename: true,
+        overwrite: false,
+      },
+      (error, result) => {
+        if (error || !result) return reject(error ?? new Error('Cloudinary upload failed'));
+        resolve({
+          publicId: result.public_id,
+          width: result.width,
+          height: result.height,
+          bytes: result.bytes,
+          format: result.format,
+        });
+      },
+    );
+    Readable.from(buffer).pipe(stream);
+  });
+
+  return {
+    ...uploaded,
+    url: cloudinary.url(uploaded.publicId, {
+      secure: true,
+      transformation: [
+        { width: 1600, crop: 'limit' },
+        { quality: 'auto:good', fetch_format: 'auto' },
+      ],
+    }),
+    thumbnailUrl: cloudinary.url(uploaded.publicId, {
+      secure: true,
+      transformation: [
+        { width: 480, height: 320, crop: 'fill', gravity: 'auto' },
+        { quality: 'auto:eco', fetch_format: 'auto' },
+      ],
+    }),
+  };
 }
 
 export async function destroyImage(publicId: string): Promise<void> {

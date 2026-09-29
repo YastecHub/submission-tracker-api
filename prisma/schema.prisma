@@ -32,6 +32,7 @@ model User {
   announcementsPublished Announcement[]         @relation("AnnouncementPublishedBy")
   announcementRevisions  AnnouncementRevision[] @relation("AnnouncementRevisionCreatedBy")
   announcementAiRuns     AnnouncementAiRun[]    @relation("AnnouncementAiRunRequestedBy")
+  announcementMedia      AnnouncementMedia[]    @relation("AnnouncementMediaCreatedBy")
 }
 
 model StudentAccount {
@@ -219,6 +220,7 @@ model Announcement {
   revisions               AnnouncementRevision[]
   reads                   AnnouncementRead[]
   aiRuns                  AnnouncementAiRun[]
+  media                   AnnouncementMedia[]
 
   @@index([status, isPinned, publishedAt])
   @@index([status, category, publishedAt])
@@ -249,6 +251,30 @@ model AnnouncementAiRun {
   @@index([announcementId, createdAt])
 }
 
+model AnnouncementMedia {
+  id             String       @id @default(uuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  publicId       String       @unique
+  url            String
+  thumbnailUrl   String
+  altText        String
+  caption        String?
+  sectionId      String?
+  sortOrder      Int          @default(0)
+  width          Int
+  height         Int
+  bytes          Int
+  format         String
+  createdBy      String
+  creator        User         @relation("AnnouncementMediaCreatedBy", fields: [createdBy], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([announcementId, sortOrder])
+  @@index([announcementId, sectionId, sortOrder])
+}
+
 model AnnouncementRevision {
   id             String       @id @default(uuid())
   announcementId String
@@ -257,6 +283,7 @@ model AnnouncementRevision {
   title          String
   summary        String
   content        Json
+  media          Json         @default("[]")
   changeNote     String?
   origin         String       @default("manual")
   createdBy      String

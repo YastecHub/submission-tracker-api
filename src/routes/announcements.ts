@@ -1,8 +1,10 @@
-import { Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
+import multer from 'multer';
 import {
   archiveAnnouncement,
   createAnnouncement,
+  deleteAnnouncementMedia,
   getAnnouncementAdmin,
   getAnnouncementUnreadCount,
   getPublishedAnnouncement,
@@ -13,11 +15,14 @@ import {
   organizeAnnouncement,
   publishAnnouncement,
   updateAnnouncement,
+  updateAnnouncementMedia,
+  uploadAnnouncementMedia,
 } from '../controllers/announcementController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
 import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
 import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
+import upload from '../middleware/uploadMiddleware';
 
 const router = Router();
 const requireStaff = requireRole(...STAFF_ROLES);
@@ -29,6 +34,33 @@ const assistantLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'You have used the announcement assistant several times. Review the current suggestions before trying again.' },
 });
+const mediaUploadLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  max: 30,
+  keyGenerator: (req) => req.user!.id,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'You have uploaded several image batches. Please wait before uploading more.' },
+});
+
+function handleMediaUpload(req: Request, res: Response, next: NextFunction): void {
+  upload.array('images', 8)(req, res, (error) => {
+    if (error instanceof multer.MulterError) {
+      const message = error.code === 'LIMIT_FILE_SIZE'
+        ? 'Each image must be under 5 MB'
+        : error.code === 'LIMIT_UNEXPECTED_FILE'
+          ? 'Upload no more than 8 images at once'
+          : 'The selected images could not be read';
+      res.status(400).json({ error: message });
+      return;
+    }
+    if (error) {
+      res.status(400).json({ error: (error as Error).message || 'The selected images could not be read' });
+      return;
+    }
+    next();
+  });
+}
 
 /**
  * @openapi
@@ -130,6 +162,80 @@ router.get('/admin/payment-options', authMiddleware, requireStaff, listAnnouncem
  *       503: { description: Announcement assistant is not configured }
  */
 router.post('/admin/organize', authMiddleware, requireStaff, assistantLimiter, organizeAnnouncement);
+
+/**
+ * @openapi
+ * /api/bulletin/admin/{id}/media:
+ *   post:
+ *     tags: [Nexium Bulletin Staff]
+ *     summary: Upload multiple version-checked announcement images
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [images, metadata, expectedVersion]
+ *             properties:
+ *               images: { type: array, maxItems: 8, items: { type: string, format: binary } }
+ *               metadata: { type: string, description: 'JSON array containing altText, caption and sectionId for each image' }
+ *               expectedVersion: { type: integer, minimum: 1 }
+ *               changeNote: { type: string, maxLength: 300 }
+ *     responses:
+ *       201: { description: Images uploaded and announcement version advanced }
+ *       409: { description: Announcement changed before upload completed }
+ *   patch:
+ *     tags: [Nexium Bulletin Staff]
+ *     summary: Save image order, alt text, captions and section assignments
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [expectedVersion, items]
+ *             properties:
+ *               expectedVersion: { type: integer, minimum: 1 }
+ *               changeNote: { type: string, maxLength: 300 }
+ *               items: { type: array, items: { $ref: '#/components/schemas/AnnouncementMediaWrite' } }
+ *     responses:
+ *       200: { description: Image details saved and announcement version advanced }
+ *       409: { description: Announcement changed before image details were saved }
+ */
+router.post('/admin/:id/media', authMiddleware, requireStaff, mediaUploadLimiter, handleMediaUpload, uploadAnnouncementMedia);
+router.patch('/admin/:id/media', authMiddleware, requireStaff, updateAnnouncementMedia);
+
+/**
+ * @openapi
+ * /api/bulletin/admin/{id}/media/{mediaId}:
+ *   delete:
+ *     tags: [Nexium Bulletin Staff]
+ *     summary: Remove one version-checked announcement image
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *       - { in: path, name: mediaId, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [expectedVersion]
+ *             properties:
+ *               expectedVersion: { type: integer, minimum: 1 }
+ *               changeNote: { type: string, maxLength: 300 }
+ *     responses:
+ *       200: { description: Image removed and announcement version advanced }
+ *       409: { description: Announcement changed before image removal }
+ */
+router.delete('/admin/:id/media/:mediaId', authMiddleware, requireStaff, deleteAnnouncementMedia);
 
 /**
  * @openapi

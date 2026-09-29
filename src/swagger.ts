@@ -163,6 +163,33 @@ const options: swaggerJsdoc.Options = {
             body: { type: 'string', maxLength: 10000 },
           },
         },
+        AnnouncementMedia: {
+          type: 'object',
+          required: ['id', 'url', 'thumbnailUrl', 'altText', 'sortOrder', 'width', 'height'],
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            url: { type: 'string', format: 'uri', description: 'Optimized student-facing image' },
+            thumbnailUrl: { type: 'string', format: 'uri', description: 'Optimized management and feed thumbnail' },
+            altText: { type: 'string', maxLength: 240 },
+            caption: { type: 'string', maxLength: 500, nullable: true },
+            sectionId: { type: 'string', nullable: true },
+            sortOrder: { type: 'integer', minimum: 0 },
+            width: { type: 'integer', minimum: 1 },
+            height: { type: 'integer', minimum: 1 },
+            bytes: { type: 'integer', minimum: 1 },
+            format: { type: 'string' },
+          },
+        },
+        AnnouncementMediaWrite: {
+          type: 'object',
+          required: ['id', 'altText'],
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            altText: { type: 'string', minLength: 1, maxLength: 240 },
+            caption: { type: 'string', maxLength: 500, nullable: true },
+            sectionId: { type: 'string', nullable: true },
+          },
+        },
         AnnouncementDocument: {
           type: 'object',
           required: ['version', 'sections'],

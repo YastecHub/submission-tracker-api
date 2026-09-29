@@ -1,5 +1,6 @@
 import { announcementService } from '../modules/announcements/application/announcementService';
 import { announcementAiService } from '../modules/announcements/application/announcementAiService';
+import { announcementMediaService } from '../modules/announcements/application/announcementMediaService';
 import { created, ok } from '../shared/http/controller';
 import { routeParam } from '../shared/http/param';
 
@@ -33,6 +34,28 @@ export const listAnnouncementPaymentOptions = ok(() =>
 
 export const organizeAnnouncement = ok((req) =>
   announcementAiService.organize(req.body, req.user!)
+);
+
+export const uploadAnnouncementMedia = created((req) =>
+  announcementMediaService.upload(
+    routeParam(req.params.id),
+    req.body,
+    Array.isArray(req.files) ? req.files : [],
+    req.user!,
+  )
+);
+
+export const updateAnnouncementMedia = ok((req) =>
+  announcementMediaService.update(routeParam(req.params.id), req.body, req.user!)
+);
+
+export const deleteAnnouncementMedia = ok((req) =>
+  announcementMediaService.remove(
+    routeParam(req.params.id),
+    routeParam(req.params.mediaId),
+    req.body,
+    req.user!,
+  )
 );
 
 export const listPublishedAnnouncements = ok((req) =>

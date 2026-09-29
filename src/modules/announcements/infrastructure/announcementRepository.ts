@@ -6,6 +6,8 @@ import {
   Prisma,
 } from '@prisma/client';
 import prisma from '../../../lib/prisma';
+import { announcementSectionIds } from '../domain/announcementMedia';
+import { announcementMediaSelect, announcementMediaSnapshot } from './announcementMediaRepository';
 
 export interface AnnouncementWriteData {
   title: string;
@@ -51,6 +53,10 @@ const staffDetailInclude = {
       createdAt: true,
       creator: { select: { id: true, name: true, role: true } },
     },
+  },
+  media: {
+    orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+    select: announcementMediaSelect,
   },
   _count: { select: { reads: true } },
 };
@@ -143,7 +149,20 @@ export class AnnouncementRepository {
       if (result.count !== 1) return null;
 
       const updated = await tx.announcement.findUniqueOrThrow({ where: { id: params.id } });
+      const validSectionIds = Array.from(announcementSectionIds(updated.content));
+      await tx.announcementMedia.updateMany({
+        where: {
+          announcementId: updated.id,
+          sectionId: { not: null, notIn: validSectionIds },
+        },
+        data: { sectionId: null },
+      });
       if (params.createRevision) {
+        const media = await tx.announcementMedia.findMany({
+          where: { announcementId: updated.id },
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          select: announcementMediaSelect,
+        });
         await tx.announcementRevision.create({
           data: {
             announcementId: updated.id,
@@ -151,6 +170,7 @@ export class AnnouncementRepository {
             title: updated.title,
             summary: updated.summary,
             content: updated.content as Prisma.InputJsonValue,
+            media: announcementMediaSnapshot(media),
             changeNote: params.changeNote,
             origin: params.origin,
             createdBy: params.data.updatedBy,
@@ -178,6 +198,11 @@ export class AnnouncementRepository {
       if (result.count !== 1) return null;
 
       const published = await tx.announcement.findUniqueOrThrow({ where: { id } });
+      const media = await tx.announcementMedia.findMany({
+        where: { announcementId: id },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: announcementMediaSelect,
+      });
       await tx.announcementRevision.create({
         data: {
           announcementId: id,
@@ -185,6 +210,7 @@ export class AnnouncementRepository {
           title: published.title,
           summary: published.summary,
           content: published.content as Prisma.InputJsonValue,
+          media: announcementMediaSnapshot(media),
           changeNote,
           createdBy: userId,
         },
@@ -262,6 +288,11 @@ export class AnnouncementRepository {
           publishedAt: true,
           updatedAt: true,
           publisher: { select: { name: true, role: true } },
+          media: {
+            orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+            take: 1,
+            select: { id: true, thumbnailUrl: true, altText: true },
+          },
           reads: {
             where: { studentId: params.studentId },
             select: { lastReadVersion: true, acknowledgedVersion: true },
@@ -302,6 +333,10 @@ export class AnnouncementRepository {
             isClosed: true,
             isDeleted: true,
           },
+        },
+        media: {
+          orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+          select: announcementMediaSelect,
         },
         reads: {
           where: { studentId },
