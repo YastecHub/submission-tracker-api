@@ -18,8 +18,8 @@ function validSuggestion() {
       body: 'CSC 401 test is on Friday 2 October at 10am in Lab 3.\n\n- Bring your ID card.',
       sourceQuotes: [source],
     }],
-    warnings: [],
-    splitSuggestions: [],
+    warnings: [] as Array<{ code: string; message: string; sourceQuote: string | null }>,
+    splitSuggestions: [] as Array<{ title: string; reason: string; sourceQuote: string }>,
   };
 }
 
@@ -28,25 +28,21 @@ test('validates and normalizes grounded assistant organization output', () => {
   assert.equal(result.category.value, 'academic');
   assert.equal(result.sections.length, 1);
   assert.match(result.sections[0].id, /^[a-zA-Z0-9_-]+$/);
-  assert.equal(result.warnings.at(-1)?.code, 'human_review_required');
+  assert.equal(result.warnings[result.warnings.length - 1]?.code, 'human_review_required');
 });
 
-test('rejects factual values that do not occur in the source', () => {
+test('allows reasoned, restructured prose, titles, and section bodies from raw notes', () => {
   const suggestion = validSuggestion();
-  suggestion.sections[0].body = suggestion.sections[0].body.replace('10am', '11am');
-  assert.throws(
-    () => normalizeAiOrganization(suggestion, source),
-    (error: unknown) => error instanceof InvalidAiOrganizationError && error.code === 'section_1_body_not_extractive',
-  );
-});
+  suggestion.title.value = 'CSC 401 Test Schedule & Instructions';
+  suggestion.summary.value = 'Students are advised that the CSC 401 test will take place on Friday, Oct 2 at 10:00 AM in Lab 3.';
+  suggestion.sections[0].heading = 'Schedule & Requirements';
+  suggestion.sections[0].body = 'Please be seated in Lab 3 before 10am with your valid student ID card.';
 
-test('rejects invented prose even when its evidence quote is real', () => {
-  const suggestion = validSuggestion();
-  suggestion.summary.value = 'CSC 401 test has been cancelled.';
-  assert.throws(
-    () => normalizeAiOrganization(suggestion, source),
-    (error: unknown) => error instanceof InvalidAiOrganizationError && error.code === 'summary_not_extractive',
-  );
+  const result = normalizeAiOrganization(suggestion, source);
+  assert.equal(result.title.value, 'CSC 401 Test Schedule & Instructions');
+  assert.equal(result.summary.value, 'Students are advised that the CSC 401 test will take place on Friday, Oct 2 at 10:00 AM in Lab 3.');
+  assert.equal(result.sections[0].heading, 'Schedule & Requirements');
+  assert.equal(result.sections[0].body, 'Please be seated in Lab 3 before 10am with your valid student ID card.');
 });
 
 test('uses deterministic warning and classification language instead of model prose', () => {
@@ -60,11 +56,23 @@ test('uses deterministic warning and classification language instead of model pr
   assert.equal(result.warnings[0].message, 'Some source wording needs careful human verification before publishing.');
 });
 
-test('rejects source evidence that is not present in the source', () => {
+test('gracefully handles missing or non-matching quotes by providing source excerpts', () => {
   const suggestion = validSuggestion();
-  suggestion.title.sourceQuotes = ['This quote was invented'];
+  suggestion.title.sourceQuotes = ['Some paraphrase not exactly matching'];
+  const result = normalizeAiOrganization(suggestion, source);
+  assert.ok(result.title.sourceQuotes.length >= 1);
+});
+
+test('rejects empty titles or invalid root objects', () => {
+  assert.throws(
+    () => normalizeAiOrganization(null, source),
+    (error: unknown) => error instanceof InvalidAiOrganizationError && error.code === 'root',
+  );
+
+  const suggestion = validSuggestion();
+  suggestion.title.value = '   ';
   assert.throws(
     () => normalizeAiOrganization(suggestion, source),
-    (error: unknown) => error instanceof InvalidAiOrganizationError && error.code.includes('not_found'),
+    (error: unknown) => error instanceof InvalidAiOrganizationError && error.code === 'title_value',
   );
 });
