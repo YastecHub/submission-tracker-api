@@ -1,7 +1,5 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 const FEATURES_CR = `
 <ul style="padding-left:20px;line-height:1.9;color:#374151;">
   <li><strong>Create Submission Events</strong> — set up assignments, attendance or lab events with a deadline</li>
@@ -73,6 +71,21 @@ function buildEmail(name: string, role: 'cr' | 'acr'): string {
   `.trim();
 }
 
+function getResendClient(): Resend {
+  return new Resend(process.env.RESEND_API_KEY);
+}
+
+export function getMailFrom(): string {
+  const configured = process.env.MAIL_FROM?.trim();
+  if (configured) {
+    if (!configured.includes('<') && configured.includes('@')) {
+      return `NEXIUM <${configured}>`;
+    }
+    return configured;
+  }
+  return 'NEXIUM <notifications@nexium31.app>';
+}
+
 export async function sendWelcomeEmail(
   name: string,
   email: string,
@@ -81,9 +94,10 @@ export async function sendWelcomeEmail(
   if (!process.env.RESEND_API_KEY) return; // skip silently in dev if key not set
 
   const roleLabel = role === 'cr' ? 'Class Representative' : 'Assistant Class Rep';
+  const client = getResendClient();
 
-  await resend.emails.send({
-    from: 'NEXIUM <onboarding@resend.dev>',
+  await client.emails.send({
+    from: getMailFrom(),
     to: email,
     subject: `Welcome to NEXIUM, ${name}! Here's your ${roleLabel} guide`,
     html: buildEmail(name, role),
@@ -92,8 +106,9 @@ export async function sendWelcomeEmail(
 
 export async function sendStudentRegistrationOtp(name: string, email: string, code: string): Promise<void> {
   if (!process.env.RESEND_API_KEY) throw new Error('Email delivery is not configured');
-  const result = await resend.emails.send({
-    from: process.env.MAIL_FROM ?? 'NEXIUM <onboarding@resend.dev>',
+  const client = getResendClient();
+  const result = await client.emails.send({
+    from: getMailFrom(),
     to: email,
     subject: 'Your NEXIUM verification code',
     html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#111827">
