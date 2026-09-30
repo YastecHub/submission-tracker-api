@@ -51,9 +51,6 @@ export class StudentAuthService {
 
     const record = await this.students.findRosterRecord(matricNumber);
     if (!record) throw notFound('Matric number was not found in class records');
-    if (!emailReflectsStudentName(email, record.fullName)) {
-      throw badRequest('The email address does not sufficiently match the name in the class record');
-    }
 
     const existing = await this.students.findRegistrationOtp(matricNumber);
     if (existing && Date.now() - existing.lastSentAt.getTime() < OTP_RESEND_COOLDOWN_MS) {
