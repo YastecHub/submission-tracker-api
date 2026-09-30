@@ -40,10 +40,13 @@ function getAllowedOrigins(): string[] {
     .map((value) => value.trim())
     .filter(Boolean);
 
-  const defaults =
-    process.env.NODE_ENV === 'production'
-      ? ['https://nexium31.vercel.app']
-      : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  const defaults = [
+    'https://nexium31.app',
+    'https://www.nexium31.app',
+    'https://nexium31.vercel.app',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ];
 
   return Array.from(new Set([...configured, ...defaults]));
 }
@@ -52,14 +55,17 @@ function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
   if (getAllowedOrigins().includes(origin)) return true;
 
-  // Optional for Vercel preview deployments. Keep disabled unless needed.
-  if (process.env.ALLOW_VERCEL_PREVIEWS === 'true') {
-    try {
-      const { hostname, protocol } = new URL(origin);
-      return protocol === 'https:' && hostname.endsWith('.vercel.app');
-    } catch {
-      return false;
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol === 'https:') {
+      if (hostname === 'nexium31.app' || hostname.endsWith('.nexium31.app')) return true;
+      if (hostname.endsWith('.vercel.app')) return true;
     }
+    if (protocol === 'http:' && (hostname === 'localhost' || hostname === '127.0.0.1')) {
+      return true;
+    }
+  } catch {
+    return false;
   }
 
   return false;
