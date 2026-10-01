@@ -6,7 +6,6 @@ import { AppError, badRequest, notFound } from '../../../shared/errors/AppError'
 import logger from '../../../lib/logger';
 import { sendStudentRegistrationOtp } from '../../../utils/mailer';
 import { studentAccountRepository, StudentAccountRepository } from '../infrastructure/studentAccountRepository';
-import { emailReflectsStudentName } from '../domain/studentIdentity';
 
 const OTP_LIFETIME_MS = 10 * 60_000;
 const OTP_RESEND_COOLDOWN_MS = 60_000;
