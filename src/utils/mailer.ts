@@ -2,25 +2,25 @@ import { Resend } from 'resend';
 
 const FEATURES_CR = `
 <ul style="padding-left:20px;line-height:1.9;color:#374151;">
-  <li><strong>Create Submission Events</strong> — set up assignments, attendance or lab events with a deadline</li>
-  <li><strong>Shareable Link + QR Code</strong> — share one link or QR and students fill in their details instantly</li>
-  <li><strong>Scan to Confirm</strong> — use the in-app QR scanner to confirm submissions physically in real time</li>
-  <li><strong>Manual Confirm</strong> — tap any submission to confirm it from the submissions list</li>
-  <li><strong>Live Dashboard</strong> — see total, confirmed, and pending counts update as students submit</li>
-  <li><strong>Search &amp; Filter</strong> — quickly find a student by name or matric number</li>
-  <li><strong>Export to Excel</strong> — download the full submission list as a spreadsheet anytime</li>
-  <li><strong>Close / Re-open Events</strong> — block new submissions when done, reopen if needed</li>
-  <li><strong>Push Notifications</strong> — enable browser notifications to be alerted the moment a student submits, even when you're not on the app</li>
+  <li><strong>Create Submission Events</strong> - set up assignments, attendance or lab events with a deadline</li>
+  <li><strong>Shareable Link + QR Code</strong> - share one link or QR and students fill in their details instantly</li>
+  <li><strong>Scan to Confirm</strong> - use the in-app QR scanner to confirm submissions physically in real time</li>
+  <li><strong>Manual Confirm</strong> - tap any submission to confirm it from the submissions list</li>
+  <li><strong>Live Dashboard</strong> - see total, confirmed, and pending counts update as students submit</li>
+  <li><strong>Search &amp; Filter</strong> - quickly find a student by name or matric number</li>
+  <li><strong>Export to Excel</strong> - download the full submission list as a spreadsheet anytime</li>
+  <li><strong>Close / Re-open Events</strong> - block new submissions when done, reopen if needed</li>
+  <li><strong>Push Notifications</strong> - enable browser notifications to be alerted the moment a student submits, even when you're not on the app</li>
 </ul>
 `;
 
 const FEATURES_ACR = `
 <ul style="padding-left:20px;line-height:1.9;color:#374151;">
-  <li><strong>Scan to Confirm</strong> — use the in-app QR scanner to confirm student submissions physically</li>
-  <li><strong>Manual Confirm</strong> — tap any submission in the list to mark it confirmed</li>
-  <li><strong>View Submissions</strong> — browse all submissions and track confirmed vs pending counts</li>
-  <li><strong>Search Students</strong> — find any student quickly by name or matric number</li>
-  <li><strong>Push Notifications</strong> — get instant browser alerts when students submit</li>
+  <li><strong>Scan to Confirm</strong> - use the in-app QR scanner to confirm student submissions physically</li>
+  <li><strong>Manual Confirm</strong> - tap any submission in the list to mark it confirmed</li>
+  <li><strong>View Submissions</strong> - browse all submissions and track confirmed vs pending counts</li>
+  <li><strong>Search Students</strong> - find any student quickly by name or matric number</li>
+  <li><strong>Push Notifications</strong> - get instant browser alerts when students submit</li>
 </ul>
 `;
 
@@ -29,7 +29,7 @@ function buildEmail(name: string, role: 'cr' | 'acr'): string {
   const features = role === 'cr' ? FEATURES_CR : FEATURES_ACR;
   const intro =
     role === 'cr'
-      ? 'You have full control over submission events — from creating them to confirming and exporting records.'
+      ? 'You have full control over submission events - from creating them to confirming and exporting records.'
       : 'You can confirm student submissions by scanning QR codes or from the submissions list.';
 
   return `

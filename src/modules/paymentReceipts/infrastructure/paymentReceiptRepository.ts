@@ -79,7 +79,7 @@ export class PaymentReceiptRepository {
             data: {
               type: 'credit',
               amount: receipt.event.amount,
-              description: `Payment: ${receipt.event.title} — ${receipt.matricNumber}`,
+              description: `Payment: ${receipt.event.title} - ${receipt.matricNumber}`,
               category: 'Dues',
               occurredAt: now,
               recordedBy: input.recordedBy,

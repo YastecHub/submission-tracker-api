@@ -44,7 +44,7 @@ test('creates an update notification with [Updated] prefix and change note when 
   assert.equal(result.title, '[Updated] Exam Schedule');
   assert.equal(result.tag, 'bulletin-announcement-id-2-5');
   assert.equal(result.priority, 'urgent');
-  assert.match(result.body, /^Update: Venue moved to Hall B — /);
+  assert.match(result.body, /^Update: Venue moved to Hall B - /);
 });
 
 test('validates and normalizes a browser push subscription with base64url keys', () => {

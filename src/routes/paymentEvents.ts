@@ -17,10 +17,10 @@ const router = Router();
 const paymentRoles = requireRole('cr', 'fin_sec', 'dev');
 const staffRoles = requireRole(...STAFF_ROLES);
 
-// Public — student needs to load the payment form
+// Public - student needs to load the payment form
 router.get('/slug/:slug', getPaymentEventBySlug);
 
-// Protected — admin routes
+// Protected - admin routes
 router.get('/', authMiddleware, staffRoles, listPaymentEvents);
 router.post('/', authMiddleware, paymentRoles, createPaymentEvent);
 router.get('/id/:id', authMiddleware, staffRoles, getPaymentEventById);

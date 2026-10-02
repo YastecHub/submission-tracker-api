@@ -42,7 +42,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // Developer / test account — always correct name + role + password
+  // Developer / test account - always correct name + role + password
   const dev = await prisma.user.upsert({
     where: { email: 'yasiroyebo@gmail.com' },
     update: { name: 'Yasir (Dev)', role: 'dev', passwordHash: devHash },
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // Financial Secretary / Treasurer — Esther
+  // Financial Secretary / Treasurer - Esther
   const finSec = await prisma.user.upsert({
     where: { email: 'olusegunesther964@gmail.com' },
     update: { name: 'Esther Olusegun', role: 'fin_sec', passwordHash: finSecHash },

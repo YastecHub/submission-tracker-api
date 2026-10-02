@@ -46,7 +46,7 @@ router.get('/status/:id', studentAuthMiddleware, getPaymentReceiptStatus);
 
 router.get('/my-tickets', studentAuthMiddleware, getMyTickets);
 
-// Protected — admin routes
+// Protected - admin routes
 router.post('/scan', authMiddleware, paymentRoles, claimPaymentReceipt);
 router.get('/:eventId/export', authMiddleware, staffRoles, exportPaymentReceiptsToExcel);
 router.get('/:eventId', authMiddleware, staffRoles, getPaymentReceipts);

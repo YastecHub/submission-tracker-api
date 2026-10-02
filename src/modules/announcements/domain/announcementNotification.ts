@@ -26,7 +26,7 @@ export function announcementNotificationPayload(
 ): AnnouncementNotificationPayload {
   const titlePrefix = options.isUpdate ? '[Updated] ' : '';
   const bodyText = options.changeNote
-    ? `Update: ${options.changeNote} — ${announcement.summary}`
+    ? `Update: ${options.changeNote} - ${announcement.summary}`
     : announcement.summary;
   return {
     title: shorten(`${titlePrefix}${announcement.title}`, 180),

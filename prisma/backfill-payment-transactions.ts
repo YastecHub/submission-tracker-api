@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   if (badTx.length > 0) {
     console.log(`Rolling back ${badTx.length} wrongly-created ledger entries:`);
     for (const t of badTx) {
-      console.log(`  - ${t.receipt!.matricNumber.padEnd(12)} ${t.receipt!.event.title} — ₦${t.amount}`);
+      console.log(`  - ${t.receipt!.matricNumber.padEnd(12)} ${t.receipt!.event.title} - ₦${t.amount}`);
     }
     await prisma.transaction.deleteMany({
       where: { id: { in: badTx.map((t) => t.id) } },
@@ -70,7 +70,7 @@ async function main(): Promise<void> {
       data: {
         type: 'credit',
         amount: receipt.event.amount,
-        description: `Payment: ${receipt.event.title} — ${receipt.matricNumber}`,
+        description: `Payment: ${receipt.event.title} - ${receipt.matricNumber}`,
         category: 'Dues',
         occurredAt: receipt.confirmedAt ?? receipt.submittedAt,
         recordedBy,
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
       },
     });
     created += 1;
-    console.log(`  ✓ ${receipt.matricNumber.padEnd(12)} ${receipt.event.title} — ₦${receipt.event.amount}`);
+    console.log(`  ✓ ${receipt.matricNumber.padEnd(12)} ${receipt.event.title} - ₦${receipt.event.amount}`);
   }
 
   console.log(`\nDone. Created ${created} ledger entries for "${targetEvent.title}".`);

@@ -147,7 +147,7 @@ router.post('/scan', authMiddleware, submissionRoles, scanConfirm);
  */
 router.post('/', createSubmission);
 
-// Public — student polls this to check if their submission was confirmed
+// Public - student polls this to check if their submission was confirmed
 router.get('/status/:id', getSubmissionStatus);
 
 /**

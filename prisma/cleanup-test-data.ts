@@ -4,8 +4,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const TEST_TRANSACTION_IDS = [
-  'ee8aa4ed-8279-4910-b2af-90179ccaedab', // tEST — 251106024 ₦1,000
-  'b5b3eccf-a745-43a5-bb0b-7a9eb2e27dc0', // tEST — 251106026 ₦1,000
+  'ee8aa4ed-8279-4910-b2af-90179ccaedab', // tEST - 251106024 ₦1,000
+  'b5b3eccf-a745-43a5-bb0b-7a9eb2e27dc0', // tEST - 251106026 ₦1,000
 ];
 
 const TEST_RECEIPT_IDS = [

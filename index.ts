@@ -87,7 +87,7 @@ app.use(
   })
 );
 
-// Gzip all responses — cuts payload size by ~70%
+// Gzip all responses - cuts payload size by ~70%
 app.use(compression());
 
 app.use(express.json());
@@ -115,7 +115,7 @@ const loginLimiter = rateLimit({
 
 app.use('/api/auth/login', loginLimiter);
 
-// Swagger UI — available at /api/docs
+// Swagger UI - available at /api/docs
 app.use(
   '/api/docs',
   swaggerUi.serve,
@@ -125,7 +125,7 @@ app.use(
   })
 );
 
-// Raw OpenAPI JSON — for Postman / code generation
+// Raw OpenAPI JSON - for Postman / code generation
 app.get('/api/docs.json', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
@@ -192,7 +192,7 @@ const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const HOST = process.env.HOST ?? '0.0.0.0';
 
 const server = app.listen(PORT, HOST);
-let stopNotificationWorker = () => {};
+let stopNotificationWorker = () => { };
 server.on('close', () => stopNotificationWorker());
 
 server.on('error', (error: NodeJS.ErrnoException) => {

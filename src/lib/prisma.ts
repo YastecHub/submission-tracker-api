@@ -30,7 +30,7 @@ function buildDatabaseUrl(rawUrl?: string): string | undefined {
   }
 }
 
-// Single shared instance — avoids multiple connection pools exhausting
+// Single shared instance - avoids multiple connection pools exhausting
 // Supabase connection pooler.
 const prisma = new PrismaClient({
   datasources: {

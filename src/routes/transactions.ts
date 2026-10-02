@@ -35,7 +35,7 @@ function handleProofUpload(req: Request, res: Response, next: NextFunction): voi
   });
 }
 
-// Public — student-facing transparency page
+// Public - student-facing transparency page
 const verificationLimiter = rateLimit({
   windowMs: 15 * 60_000,
   max: 10,
@@ -46,7 +46,7 @@ const verificationLimiter = rateLimit({
 router.get('/transparency/ledger', studentAuthMiddleware, getLedger);
 router.post('/transparency/verify-matric', verificationLimiter, studentAuthMiddleware, verifyMatric);
 
-// Admin — list/create/edit/delete transactions
+// Admin - list/create/edit/delete transactions
 const financeRoles = requireRole('fin_sec', 'dev');
 const staffRoles = requireRole(...STAFF_ROLES);
 

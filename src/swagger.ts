@@ -15,7 +15,7 @@ const options: swaggerJsdoc.Options = {
       title: 'NEXIUM API',
       version: '1.0.0',
       description:
-        'NEXIUM — class submissions, payments, account transparency and Nexium Bulletin. ' +
+        'NEXIUM - class submissions, payments, account transparency and Nexium Bulletin. ' +
         'Staff manage class workflows and durable announcements; verified student accounts access payments, tickets, transparency and published updates.',
     },
     servers,

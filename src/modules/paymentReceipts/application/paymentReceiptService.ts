@@ -15,7 +15,7 @@ function canManage(user: Express.Request['user'], event: { createdBy: string }):
 }
 
 export class PaymentReceiptService {
-  constructor(private readonly repository: PaymentReceiptRepository) {}
+  constructor(private readonly repository: PaymentReceiptRepository) { }
 
   async submit(input: { eventId?: string; level?: string; file?: Express.Multer.File }, student: NonNullable<Express.Request['student']>) {
     if (!input.eventId) throw badRequest('eventId is required');
@@ -174,7 +174,7 @@ export class PaymentReceiptService {
     let receipt = normalized.length === 8 ? await this.repository.findTicketByShortCode(normalized) : await this.repository.findTicketById(normalized);
     if (receipt && !receipt.event.hasTickets) receipt = null;
     if (!receipt) throw notFound('Ticket not found');
-    if (receipt.status === 'rejected') throw forbidden('This ticket has been rejected — student should contact fin sec');
+    if (receipt.status === 'rejected') throw forbidden('This ticket has been rejected - student should contact fin sec');
     if (receipt.status !== 'confirmed') throw forbidden('Payment has not been confirmed yet');
     if (!canManage(user, receipt.event)) throw forbidden('You are not allowed to claim this ticket');
     if (receipt.isClaimed) return { alreadyClaimed: true, receipt: { fullName: receipt.fullName, matricNumber: receipt.matricNumber, claimedBy: receipt.claimedBy, claimedAt: receipt.claimedAt } };
