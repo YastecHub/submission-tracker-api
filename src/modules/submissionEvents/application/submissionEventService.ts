@@ -99,33 +99,33 @@ export class SubmissionEventService {
     return serializeWithStats(event, confirmedCount);
   }
 
-  async toggleClose(id: string, user: Express.Request['user']) {
-    const event = await this.repository.findManageableById(id, user);
-    if (!event) throw notFound('Event not found or not authorised');
+  async toggleClose(id: string) {
+    const event = await this.repository.findManageableById(id);
+    if (!event) throw notFound('Event not found');
 
     const updated = await this.repository.updateCloseState(id, !event.isClosed);
     cacheDelete(`event:slug:${event.slug}`);
     return updated;
   }
 
-  async extend(id: string, deadlineInput: string | undefined, user: Express.Request['user']) {
+  async extend(id: string, deadlineInput: string | undefined) {
     if (!deadlineInput) throw badRequest('deadline is required');
 
     const deadline = new Date(deadlineInput);
     if (Number.isNaN(deadline.getTime())) throw badRequest('deadline must be a valid date');
     if (deadline <= new Date()) throw badRequest('deadline must be in the future');
 
-    const event = await this.repository.findManageableById(id, user);
-    if (!event) throw notFound('Event not found or not authorised');
+    const event = await this.repository.findManageableById(id);
+    if (!event) throw notFound('Event not found');
 
     const updated = await this.repository.extend(id, deadline);
     cacheDelete(`event:slug:${event.slug}`);
     return updated;
   }
 
-  async delete(id: string, user: Express.Request['user']) {
-    const event = await this.repository.findManageableById(id, user);
-    if (!event) throw notFound('Event not found or not authorised');
+  async delete(id: string) {
+    const event = await this.repository.findManageableById(id);
+    if (!event) throw notFound('Event not found');
 
     await this.repository.softDelete(id);
     cacheDelete(`event:slug:${event.slug}`);

@@ -65,10 +65,9 @@ export class SubmissionEventRepository {
     });
   }
 
-  findManageableById(id: string, user: Express.Request['user']) {
-    return prisma.submissionEvent.findFirst({
-      where: { id, ...(user!.role === 'dev' ? {} : { createdBy: user!.id }), isDeleted: false },
-    });
+  /** Every class rep (CR, ACR, Fin Sec, Dev) can manage every active event. */
+  findManageableById(id: string) {
+    return prisma.submissionEvent.findFirst({ where: { id, isDeleted: false } });
   }
 
   confirmedCount(eventId: string) {

@@ -1,3 +1,8 @@
+/**
+ * Checks that an email address resembles the student's roster name.
+ * Not enforced during registration for now: not every student's email has
+ * been collected yet, so any email address is accepted. Kept for later use.
+ */
 export function emailReflectsStudentName(email: string, fullName: string): boolean {
   const localPart = email.split('@')[0]?.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase() ?? '';
   const tokens = Array.from(new Set(

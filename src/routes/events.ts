@@ -10,17 +10,16 @@ import {
 } from '../controllers/eventController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
-import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
+import { CLASS_ROLES } from '../modules/auth/domain/classRepAccess';
 
 const router = Router();
-const submissionRoles = requireRole('cr', 'acr', 'dev');
-const staffRoles = requireRole(...STAFF_ROLES);
+const classRepRoles = requireRole(...CLASS_ROLES);
 
 /**
  * @openapi
  * tags:
  *   name: Events
- *   description: Staff event viewing with role- and ownership-restricted management
+ *   description: Submission events managed by class reps
  */
 
 /**
@@ -70,7 +69,7 @@ const staffRoles = requireRole(...STAFF_ROLES);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', authMiddleware, staffRoles, listEvents);
+router.get('/', authMiddleware, classRepRoles, listEvents);
 
 /**
  * @openapi
@@ -126,7 +125,7 @@ router.get('/', authMiddleware, staffRoles, listEvents);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/', authMiddleware, submissionRoles, createEvent);
+router.post('/', authMiddleware, classRepRoles, createEvent);
 
 /**
  * @openapi
@@ -164,7 +163,7 @@ router.post('/', authMiddleware, submissionRoles, createEvent);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/id/:id', authMiddleware, staffRoles, getEventById);
+router.get('/id/:id', authMiddleware, classRepRoles, getEventById);
 
 /**
  * @openapi
@@ -233,7 +232,7 @@ router.get('/:slug', getEventBySlug);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.patch('/:id/close', authMiddleware, submissionRoles, toggleClose);
+router.patch('/:id/close', authMiddleware, classRepRoles, toggleClose);
 
 /**
  * @openapi
@@ -270,7 +269,7 @@ router.patch('/:id/close', authMiddleware, submissionRoles, toggleClose);
  *       404:
  *         description: Event not found
  */
-router.patch('/:id/extend', authMiddleware, submissionRoles, extendEvent);
+router.patch('/:id/extend', authMiddleware, classRepRoles, extendEvent);
 
 /**
  * @openapi
@@ -312,6 +311,6 @@ router.patch('/:id/extend', authMiddleware, submissionRoles, extendEvent);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete('/:id', authMiddleware, submissionRoles, deleteEvent);
+router.delete('/:id', authMiddleware, classRepRoles, deleteEvent);
 
 export default router;

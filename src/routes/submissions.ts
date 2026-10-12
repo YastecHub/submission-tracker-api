@@ -10,11 +10,10 @@ import {
 } from '../controllers/submissionController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
-import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
+import { CLASS_ROLES } from '../modules/auth/domain/classRepAccess';
 
 const router = Router();
-const submissionRoles = requireRole('cr', 'acr', 'dev');
-const staffRoles = requireRole(...STAFF_ROLES);
+const classRepRoles = requireRole(...CLASS_ROLES);
 
 /**
  * @openapi
@@ -75,7 +74,7 @@ const staffRoles = requireRole(...STAFF_ROLES);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/scan', authMiddleware, submissionRoles, scanConfirm);
+router.post('/scan', authMiddleware, classRepRoles, scanConfirm);
 
 /**
  * @openapi
@@ -189,8 +188,8 @@ router.get('/status/:id', getSubmissionStatus);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:eventId/export', authMiddleware, staffRoles, exportToExcel);
-router.patch('/:eventId/confirm-all', authMiddleware, submissionRoles, confirmAllSubmissions);
+router.get('/:eventId/export', authMiddleware, classRepRoles, exportToExcel);
+router.patch('/:eventId/confirm-all', authMiddleware, classRepRoles, confirmAllSubmissions);
 
 /**
  * @openapi
@@ -262,7 +261,7 @@ router.patch('/:eventId/confirm-all', authMiddleware, submissionRoles, confirmAl
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:eventId', authMiddleware, staffRoles, getSubmissions);
+router.get('/:eventId', authMiddleware, classRepRoles, getSubmissions);
 
 /**
  * @openapi
@@ -301,6 +300,6 @@ router.get('/:eventId', authMiddleware, staffRoles, getSubmissions);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.patch('/:id/confirm', authMiddleware, submissionRoles, confirmSubmission);
+router.patch('/:id/confirm', authMiddleware, classRepRoles, confirmSubmission);
 
 export default router;

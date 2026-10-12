@@ -12,7 +12,7 @@ import {
   AnnouncementMediaRepository,
 } from '../infrastructure/announcementMediaRepository';
 
-type StaffUser = NonNullable<Express.Request['user']>;
+type ClassRepUser = NonNullable<Express.Request['user']>;
 const MAX_ANNOUNCEMENT_IMAGES = 12;
 const MAX_IMAGES_PER_UPLOAD = 8;
 
@@ -43,7 +43,7 @@ export class AnnouncementMediaService {
     announcementId: string,
     inputValue: unknown,
     files: Express.Multer.File[],
-    user: StaffUser,
+    user: ClassRepUser,
   ) {
     const input = requestObject(inputValue);
     if (files.length < 1) throw badRequest('Choose at least one image to upload');
@@ -89,7 +89,7 @@ export class AnnouncementMediaService {
     }
   }
 
-  async update(announcementId: string, inputValue: unknown, user: StaffUser) {
+  async update(announcementId: string, inputValue: unknown, user: ClassRepUser) {
     const input = requestObject(inputValue);
     const current = await this.editableAnnouncement(announcementId, user);
     const expectedVersion = version(input.expectedVersion);
@@ -115,7 +115,7 @@ export class AnnouncementMediaService {
     return result;
   }
 
-  async remove(announcementId: string, mediaId: string, inputValue: unknown, user: StaffUser) {
+  async remove(announcementId: string, mediaId: string, inputValue: unknown, user: ClassRepUser) {
     const input = requestObject(inputValue);
     const current = await this.editableAnnouncement(announcementId, user);
     const expectedVersion = version(input.expectedVersion);
@@ -137,7 +137,7 @@ export class AnnouncementMediaService {
     return result;
   }
 
-  private async editableAnnouncement(announcementId: string, user: StaffUser) {
+  private async editableAnnouncement(announcementId: string, user: ClassRepUser) {
     const announcement = await this.repository.findAnnouncementForAction(announcementId);
     if (!announcement) throw notFound('Announcement not found');
     if (!canEditAnnouncement({ id: user.id, role: user.role as UserRole }, announcement)) {

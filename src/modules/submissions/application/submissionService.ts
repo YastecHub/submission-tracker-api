@@ -4,13 +4,10 @@ import { exportSubmissions } from '../../../utils/excelExporter';
 import { sendPush } from '../../../utils/pushNotifier';
 import { AppError, badRequest, forbidden, notFound } from '../../../shared/errors/AppError';
 import { submissionRepository, SubmissionRepository } from '../infrastructure/submissionRepository';
+import { isClassRep } from '../../auth/domain/classRepAccess';
 
 const CONFIRM_ALL_MIN_SUBMISSIONS = 90;
 const MAX_EXPORT_ROWS = 10_000;
-
-function canManage(user: Express.Request['user'], event: { createdBy: string }): boolean {
-  return user!.role === 'dev' || event.createdBy === user!.id;
-}
 
 export class SubmissionService {
   constructor(private readonly repository: SubmissionRepository) {}
@@ -75,7 +72,7 @@ export class SubmissionService {
   async confirm(id: string, user: Express.Request['user']) {
     const submission = await this.repository.findByIdWithEvent(id);
     if (!submission) throw notFound('Submission not found');
-    if (!canManage(user, submission.event)) throw forbidden('You are not allowed to confirm this submission');
+    if (!isClassRep(user?.role)) throw forbidden('You are not allowed to confirm this submission');
     return this.repository.confirm(id, user!.name);
   }
 
@@ -83,7 +80,7 @@ export class SubmissionService {
     if (!submissionId) throw badRequest('submissionId is required');
     const submission = await this.repository.findByIdWithEvent(submissionId);
     if (!submission) throw notFound('Submission not found');
-    if (!canManage(user, submission.event)) throw forbidden('You are not allowed to confirm this submission');
+    if (!isClassRep(user?.role)) throw forbidden('You are not allowed to confirm this submission');
     if (submission.isConfirmed) return { alreadyConfirmed: true, submission };
     return { alreadyConfirmed: false, submission: await this.repository.confirm(submissionId, user!.name) };
   }
@@ -91,7 +88,7 @@ export class SubmissionService {
   async confirmAll(eventId: string, user: Express.Request['user']) {
     const event = await this.repository.findActiveEventById(eventId);
     if (!event) throw notFound('Event not found');
-    if (!canManage(user, event)) throw forbidden('You are not allowed to confirm submissions for this event');
+    if (!isClassRep(user?.role)) throw forbidden('You are not allowed to confirm submissions for this event');
 
     const [total, pendingTotal] = await Promise.all([
       this.repository.count({ eventId }),

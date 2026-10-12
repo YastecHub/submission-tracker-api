@@ -13,7 +13,7 @@ import { requireRole } from '../middleware/requireRole';
 import upload from '../middleware/uploadMiddleware';
 import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
 import { rateLimit } from 'express-rate-limit';
-import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
+import { CLASS_ROLES } from '../modules/auth/domain/classRepAccess';
 
 const router = Router();
 
@@ -47,12 +47,11 @@ router.get('/transparency/ledger', studentAuthMiddleware, getLedger);
 router.post('/transparency/verify-matric', verificationLimiter, studentAuthMiddleware, verifyMatric);
 
 // Admin - list/create/edit/delete transactions
-const financeRoles = requireRole('fin_sec', 'dev');
-const staffRoles = requireRole(...STAFF_ROLES);
+const classRepRoles = requireRole(...CLASS_ROLES);
 
-router.get('/transactions', authMiddleware, staffRoles, listTransactionsAdmin);
-router.post('/transactions', authMiddleware, financeRoles, handleProofUpload, createTransaction);
-router.patch('/transactions/:id', authMiddleware, financeRoles, handleProofUpload, updateTransaction);
-router.delete('/transactions/:id', authMiddleware, financeRoles, deleteTransaction);
+router.get('/transactions', authMiddleware, classRepRoles, listTransactionsAdmin);
+router.post('/transactions', authMiddleware, classRepRoles, handleProofUpload, createTransaction);
+router.patch('/transactions/:id', authMiddleware, classRepRoles, handleProofUpload, updateTransaction);
+router.delete('/transactions/:id', authMiddleware, classRepRoles, deleteTransaction);
 
 export default router;

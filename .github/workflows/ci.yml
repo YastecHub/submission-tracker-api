@@ -11,17 +11,32 @@ permissions:
 
 concurrency:
   group: backend-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
       JWT_SECRET: ci_secret_key_needs_to_be_at_least_32_characters_long
       NODE_ENV: test
+      ENABLE_FILE_LOGGING: 'false'
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -41,27 +56,73 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
+      # Every migration must apply cleanly to an empty database, in order.
+      - name: Apply all migrations to a fresh database
+        run: npx prisma migrate deploy
+
+      # The migrated database must match schema.prisma exactly (exit code 2 = drift).
+      - name: Check migrations match schema.prisma
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+
       - name: Run tests
         run: npm test
 
       - name: Build production server
         run: npm run build
 
-  deploy-heroku:
+  # Applies pending migrations to production before new code is deployed.
+  # Needs the PRODUCTION_DATABASE_URL and PRODUCTION_DIRECT_URL repository secrets.
+  migrate-production:
     needs: verify
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        if: env.DIRECT_URL != ''
+        run: npm ci
+
+      - name: Apply pending migrations to production
+        if: env.DIRECT_URL != ''
+        run: |
+          npx prisma migrate status || true
+          npx prisma migrate deploy
+
+      - name: Production migration secrets missing
+        if: env.DIRECT_URL == ''
+        run: echo "::warning::PRODUCTION_DIRECT_URL is not set, so CI did not migrate production. Heroku's release phase (Procfile) still runs prisma migrate deploy."
+
+  deploy-heroku:
+    needs: [verify, migrate-production]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Deploy to Heroku (if secrets configured)
-        if: ${{ env.HEROKU_API_KEY != '' && env.HEROKU_APP_NAME != '' }}
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-          HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+      - name: Deploy to Heroku
+        if: env.HEROKU_API_KEY != '' && env.HEROKU_APP_NAME != ''
         run: |
           git remote add heroku "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP_NAME}.git"
-          git push heroku master:main --force || git push heroku master --force
+          git push heroku HEAD:refs/heads/main --force
+
+      - name: Heroku secrets missing
+        if: env.HEROKU_API_KEY == '' || env.HEROKU_APP_NAME == ''
+        run: echo "::warning::HEROKU_API_KEY / HEROKU_APP_NAME are not set, so CI did not deploy. If Heroku auto-deploys from GitHub this is expected."

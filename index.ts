@@ -20,6 +20,7 @@ import studentAuthRoutes from './src/routes/studentAuth';
 import announcementRoutes from './src/routes/announcements';
 import { startNotificationDeliveryWorker } from './src/modules/announcements/application/notificationDeliveryWorker';
 import logger, { requestLogger } from './src/lib/logger';
+import { publicApiUrl } from './src/lib/publicUrl';
 
 const app = express();
 
@@ -27,7 +28,7 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET must be set to a strong secret of at least 32 characters');
 }
 
-// Render forwards the original client IP through one trusted proxy.
+// Heroku's router forwards the original client IP through one trusted proxy.
 app.set('trust proxy', 1);
 
 // HTTP request logger using winston
@@ -218,7 +219,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 server.on('listening', async () => {
-  const base = process.env.PUBLIC_API_URL ?? process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${PORT}`;
+  const base = publicApiUrl() ?? `http://localhost:${PORT}`;
 
   console.log('\n');
   console.log('  \x1b[1m\x1b[35mNEXIUM API\x1b[0m');

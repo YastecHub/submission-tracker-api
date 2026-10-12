@@ -16,14 +16,26 @@ import {
   AnnouncementAiRunRepository,
 } from '../infrastructure/announcementAiRunRepository';
 
-type StaffUser = NonNullable<Express.Request['user']>;
+type ClassRepUser = NonNullable<Express.Request['user']>;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Source length the assistant accepts. 5,000 characters plus the prompt and the
+ * 3,000-token answer fit within the model provider's per-minute token budget.
+ * The client mirrors these numbers in features/bulletin/model/aiLimits.ts.
+ */
+export const AI_SOURCE_MIN_LENGTH = 20;
+export const AI_SOURCE_MAX_LENGTH = 5_000;
 
 function sourceText(value: unknown): string {
   if (typeof value !== 'string') throw badRequest('Paste source material before asking for help');
   const source = value.trim();
-  if (source.length < 20) throw badRequest('Add a little more source material before asking for help');
-  if (source.length > 5_000) throw badRequest('Source material is too long for the AI organizer (max ~5,000 characters). Please shorten or organize manually using the Composer.');
+  if (source.length < AI_SOURCE_MIN_LENGTH) {
+    throw badRequest(`Add at least ${AI_SOURCE_MIN_LENGTH} characters of source material before asking for help`);
+  }
+  if (source.length > AI_SOURCE_MAX_LENGTH) {
+    throw badRequest(`The assistant can organize up to ${AI_SOURCE_MAX_LENGTH.toLocaleString('en-US')} characters. Shorten the source or organize it manually.`);
+  }
   return source;
 }
 
@@ -44,7 +56,7 @@ export class AnnouncementAiService {
     private readonly organizerFactory: () => AnnouncementOrganizer,
   ) {}
 
-  async organize(input: unknown, user: StaffUser) {
+  async organize(input: unknown, user: ClassRepUser) {
     const request = input && typeof input === 'object' && !Array.isArray(input)
       ? input as { rawSource?: unknown; announcementId?: unknown }
       : {};

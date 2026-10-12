@@ -34,7 +34,7 @@ const SOURCE_TYPES: AnnouncementSourceType[] = [
   'external_information',
 ];
 
-type StaffUser = NonNullable<Express.Request['user']>;
+type ClassRepUser = NonNullable<Express.Request['user']>;
 
 interface WriteInput {
   title?: unknown;
@@ -191,7 +191,7 @@ export class AnnouncementService {
     return { ...data, readCount: _count.reads };
   }
 
-  async create(input: WriteInput, user: StaffUser) {
+  async create(input: WriteInput, user: ClassRepUser) {
     const data = toWriteData(input);
     const review = aiReview(input.aiReview);
     await this.validateAiReview(review, data, user.id, null);
@@ -211,7 +211,7 @@ export class AnnouncementService {
     }
   }
 
-  async update(id: string, input: WriteInput, user: StaffUser) {
+  async update(id: string, input: WriteInput, user: ClassRepUser) {
     const current = await this.repository.findForAction(id);
     if (!current) throw notFound('Announcement not found');
     if (!canEditAnnouncement({ id: user.id, role: user.role as UserRole }, current)) {
@@ -243,14 +243,12 @@ export class AnnouncementService {
     }
   }
 
-  async publish(id: string, input: { expectedVersion?: unknown; changeNote?: unknown }, user: StaffUser) {
+  async publish(id: string, input: { expectedVersion?: unknown; changeNote?: unknown }, user: ClassRepUser) {
     const current = await this.repository.findForAction(id);
     if (!current) throw notFound('Announcement not found');
     if (current.status !== 'draft') throw badRequest('Only draft announcements can be published');
     if (!canPublishAnnouncement(user.role as UserRole, current.category)) {
-      throw forbidden(current.category === 'finance'
-        ? 'Only the Financial Secretary can publish finance announcements'
-        : 'Only the Class Representative can publish this announcement');
+      throw forbidden('Only class reps can publish announcements');
     }
 
     const published = await this.repository.publishWithVersion(
@@ -263,7 +261,7 @@ export class AnnouncementService {
     return published;
   }
 
-  async archive(id: string, input: { expectedVersion?: unknown }, user: StaffUser) {
+  async archive(id: string, input: { expectedVersion?: unknown }, user: ClassRepUser) {
     const current = await this.repository.findForAction(id);
     if (!current) throw notFound('Announcement not found');
     if (current.status !== 'published') throw badRequest('Only published announcements can be archived');

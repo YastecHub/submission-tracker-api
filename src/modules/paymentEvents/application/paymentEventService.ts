@@ -124,9 +124,9 @@ export class PaymentEventService {
     };
   }
 
-  async update(id: string, input: { hasTickets?: boolean; description?: string }, user: Express.Request['user']) {
-    const event = await this.repository.findManageableById(id, user);
-    if (!event) throw notFound('Payment event not found or not authorised');
+  async update(id: string, input: { hasTickets?: boolean; description?: string }) {
+    const event = await this.repository.findManageableById(id);
+    if (!event) throw notFound('Payment event not found');
 
     const updates: { hasTickets?: boolean; description?: string | null } = {};
     if (input.hasTickets !== undefined) updates.hasTickets = !!input.hasTickets;
@@ -144,26 +144,26 @@ export class PaymentEventService {
     return updated;
   }
 
-  async toggleClose(id: string, user: Express.Request['user']) {
-    const event = await this.repository.findManageableById(id, user);
-    if (!event) throw notFound('Payment event not found or not authorised');
+  async toggleClose(id: string) {
+    const event = await this.repository.findManageableById(id);
+    if (!event) throw notFound('Payment event not found');
     return this.repository.updateCloseState(id, !event.isClosed);
   }
 
-  async extend(id: string, deadlineInput: string | undefined, user: Express.Request['user']) {
+  async extend(id: string, deadlineInput: string | undefined) {
     if (!deadlineInput) throw badRequest('deadline is required');
     const deadline = new Date(deadlineInput);
     if (Number.isNaN(deadline.getTime())) throw badRequest('deadline must be a valid date');
     if (deadline <= new Date()) throw badRequest('deadline must be in the future');
 
-    const event = await this.repository.findManageableById(id, user);
-    if (!event) throw notFound('Payment event not found or not authorised');
+    const event = await this.repository.findManageableById(id);
+    if (!event) throw notFound('Payment event not found');
     return this.repository.extend(id, deadline);
   }
 
-  async delete(id: string, user: Express.Request['user']) {
-    const event = await this.repository.findManageableById(id, user);
-    if (!event) throw notFound('Payment event not found or not authorised');
+  async delete(id: string) {
+    const event = await this.repository.findManageableById(id);
+    if (!event) throw notFound('Payment event not found');
     await this.repository.softDelete(id);
     return { message: 'Payment event deleted' };
   }

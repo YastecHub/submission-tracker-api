@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { AnnouncementService } from '../src/modules/announcements/application/announcementService';
 
-const user = { id: 'staff-1', email: 'staff@example.com', name: 'Staff', role: 'cr' as const };
+const user = { id: 'classrep-1', email: 'classrep@example.com', name: 'Class Rep', role: 'cr' as const };
 const source = 'CSC 401 test is on Friday 2 October at 10am in Lab 3.';
 const runId = 'f14491d0-98db-4c45-93b3-cfb63904a941';
 const section = { id: 'suggested-section', heading: 'Test details', body: source };
