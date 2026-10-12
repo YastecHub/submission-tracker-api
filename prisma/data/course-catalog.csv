@@ -6,7 +6,7 @@
 # Columns:
 #   code       Course code, e.g. ABC 201 (unique across the whole catalog)
 #   title      Full course title
-#   units      Credit units (1-12)
+#   units      Credit units (1-6)
 #   level      100, 200, 300, 400, 500 or 600
 #   semester   1 or 2
 #   elective   yes/no (optional, default no)

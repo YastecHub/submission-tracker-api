@@ -11,78 +11,16 @@
  * title or units here never rewrites anyone's history.
  */
 import 'dotenv/config';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
-import { parseCsv } from '../src/modules/gpa/domain/csv';
-import { normalizeCourseCode } from '../src/modules/gpa/domain/grades';
-import { parseFlag, parseLevel, parseSemester } from '../src/modules/gpa/domain/gpaImport';
+import { planCatalogSync, readCatalogCsv } from '../src/modules/gpa/domain/catalogCsv';
+import { defaultCatalogFile } from '../src/modules/gpa/infrastructure/catalogSync';
 
-interface CatalogRow {
-  code: string;
-  title: string;
-  units: number;
-  level: number;
-  semester: number;
-  isElective: boolean;
-  sortOrder: number;
-}
-
-function defaultCatalogFile(): string {
-  // tsx runs this from prisma/, the compiled copy runs from dist/prisma/.
-  const candidates = [join(__dirname, 'data', 'course-catalog.csv'), join(process.cwd(), 'prisma', 'data', 'course-catalog.csv')];
-  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
-}
+export { readCatalogCsv };
 
 function argValue(name: string): string | undefined {
   const index = process.argv.indexOf(name);
   return index === -1 ? undefined : process.argv[index + 1];
-}
-
-export function readCatalogCsv(text: string): { rows: CatalogRow[]; errors: string[] } {
-  const rows: CatalogRow[] = [];
-  const errors: string[] = [];
-  const seen = new Map<string, number>();
-  let header: string[] | null = null;
-  let position = 0;
-
-  for (const record of parseCsv(text)) {
-    if (!header) {
-      header = record.values.map((value) => value.toLowerCase());
-      for (const column of ['code', 'title', 'units', 'level', 'semester']) {
-        if (!header.includes(column)) errors.push(`Header is missing "${column}"`);
-      }
-      if (errors.length) break;
-      continue;
-    }
-    const cell = (column: string) => record.values[header!.indexOf(column)] ?? '';
-    const where = `line ${record.line}`;
-    const code = normalizeCourseCode(cell('code'));
-    const title = cell('title').replace(/\s+/g, ' ');
-    const units = Number(cell('units'));
-    const level = parseLevel(cell('level'));
-    const semester = parseSemester(cell('semester'));
-    const isElective = header.includes('elective') ? parseFlag(cell('elective')) : false;
-    const sortText = header.includes('sort') ? cell('sort') : '';
-    const sortOrder = sortText ? Number(sortText) : position;
-
-    if (!code) errors.push(`${where}: code is required`);
-    if (!title) errors.push(`${where}: title is required`);
-    if (title.length > 150) errors.push(`${where}: title is too long`);
-    if (!Number.isInteger(units) || units < 1 || units > 12) errors.push(`${where}: units must be 1-12`);
-    if (!level) errors.push(`${where}: level must be 100-600`);
-    if (!semester) errors.push(`${where}: semester must be 1 or 2`);
-    if (isElective === null) errors.push(`${where}: elective must be yes or no`);
-    if (!Number.isInteger(sortOrder)) errors.push(`${where}: sort must be a whole number`);
-    const key = code.replace(/\s/g, '');
-    if (seen.has(key)) errors.push(`${where}: ${code} is already on line ${seen.get(key)}`);
-    seen.set(key, record.line);
-
-    rows.push({ code, title, units, level: level ?? 0, semester: semester ?? 0, isElective: !!isElective, sortOrder });
-    position += 1;
-  }
-  if (!header) errors.push('The file has no header row');
-  return { rows, errors };
 }
 
 async function main(): Promise<void> {
@@ -104,15 +42,7 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient({ datasources: { db: { url: process.env.DIRECT_URL ?? process.env.DATABASE_URL } } });
   try {
     const existing = await prisma.courseCatalog.findMany();
-    const byCode = new Map(existing.map((course) => [course.code, course]));
-    const toCreate = rows.filter((row) => !byCode.has(row.code));
-    const toUpdate = rows.filter((row) => {
-      const current = byCode.get(row.code);
-      return current && (current.title !== row.title || current.units !== row.units || current.level !== row.level
-        || current.semester !== row.semester || current.isElective !== row.isElective || current.sortOrder !== row.sortOrder || !current.isActive);
-    });
-    const fileCodes = new Set(rows.map((row) => row.code));
-    const toDeactivate = deactivateMissing ? existing.filter((course) => course.isActive && !fileCodes.has(course.code)) : [];
+    const { toCreate, toUpdate, toDeactivate } = planCatalogSync(existing, rows, deactivateMissing);
 
     console.log(`Catalog file: ${rows.length} course(s)`);
     console.log(`  new:         ${toCreate.length}`);

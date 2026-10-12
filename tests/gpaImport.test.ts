@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseCsv } from '../src/modules/gpa/domain/csv';
 import { parseImportCsv, parseLevel } from '../src/modules/gpa/domain/gpaImport';
-import { readCatalogCsv } from '../prisma/seed-course-catalog';
+import { readCatalogCsv } from '../src/modules/gpa/domain/catalogCsv';
 
 test('CSV reader handles quotes, commas and newlines in quotes, CRLF, BOM and comments', () => {
   const text = '﻿a,b\r\n# comment\r\n"x, y","say ""hi"""\r\n\r\n"multi\nline",z\n';

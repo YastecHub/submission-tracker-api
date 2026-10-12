@@ -1,5 +1,5 @@
 import { parseCsv } from './csv';
-import { isGrade, isLevel, normalizeCourseCode, type Grade, type Level, type SemesterNumber } from './grades';
+import { isGrade, isLevel, MAX_UNITS_PER_COURSE, normalizeCourseCode, type Grade, type Level, type SemesterNumber } from './grades';
 
 export const IMPORT_TEMPLATE_HEADER = 'level,semester,code,title,units,grade,carryover,retake,session';
 export const MAX_IMPORT_ROWS = 1_000;
@@ -122,8 +122,8 @@ export function parseImportCsv(text: string): { rows: ImportRow[]; issues: Impor
     let units: number | null = null;
     if (rawUnits) {
       units = Number(rawUnits);
-      if (!Number.isInteger(units) || units < 1 || units > 12) {
-        fail('units', `"${rawUnits}" is not a valid number of units (1 to 12).`);
+      if (!Number.isInteger(units) || units < 1 || units > MAX_UNITS_PER_COURSE) {
+        fail('units', `"${rawUnits}" is not a valid number of units (1 to ${MAX_UNITS_PER_COURSE}).`);
         units = null;
       }
     }

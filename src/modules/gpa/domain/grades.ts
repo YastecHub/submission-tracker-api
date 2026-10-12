@@ -13,7 +13,8 @@ export type Level = (typeof LEVELS)[number];
 export const SEMESTERS = [1, 2] as const;
 export type SemesterNumber = (typeof SEMESTERS)[number];
 
-export const MAX_UNITS_PER_COURSE = 12;
+/** The heaviest course in the programme carries 6 units. */
+export const MAX_UNITS_PER_COURSE = 6;
 export const MAX_COURSES_PER_SEMESTER = 30;
 
 /** Standard NUC degree classes on a 5.0 scale. */

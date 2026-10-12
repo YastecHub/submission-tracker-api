@@ -135,7 +135,7 @@ test('duplicate courses and bad grades are rejected with clear messages', async 
   const { service } = setup();
   await assert.rejects(service.createSemester('student-a', { level: 200, semester: 1, courses: [course('PCT 201', 'A'), course('pct201', 'B')] }), /listed twice/);
   await assert.rejects(service.createSemester('student-a', { level: 200, semester: 1, courses: [course('PCT 201', 'G')] }), /invalid grade/);
-  await assert.rejects(service.createSemester('student-a', { level: 200, semester: 1, courses: [course('PCT 201', 'A', 0)] }), /between 1 and 12 units/);
+  await assert.rejects(service.createSemester('student-a', { level: 200, semester: 1, courses: [course('PCT 201', 'A', 7)] }), /between 1 and 6 units/);
   await assert.rejects(service.createSemester('student-a', { level: 700, semester: 1, courses: [] }), /Level must be/);
 });
 

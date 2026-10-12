@@ -20,6 +20,7 @@ import studentAuthRoutes from './src/routes/studentAuth';
 import announcementRoutes from './src/routes/announcements';
 import gpaRoutes from './src/routes/gpa';
 import { startNotificationDeliveryWorker } from './src/modules/announcements/application/notificationDeliveryWorker';
+import { syncCourseCatalog } from './src/modules/gpa/infrastructure/catalogSync';
 import logger, { requestLogger } from './src/lib/logger';
 import { publicApiUrl } from './src/lib/publicUrl';
 
@@ -239,6 +240,13 @@ server.on('listening', async () => {
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[32m● Connected\x1b[0m');
     logger.info(`NEXIUM API server listening on ${base} [DB Connected]`);
     stopNotificationWorker = startNotificationDeliveryWorker();
+    // The GPA course list lives in prisma/data/course-catalog.csv; keep the database in step with it.
+    syncCourseCatalog(prisma)
+      .then((result) => {
+        const changed = result.created + result.updated;
+        logger.info(`Course catalog: ${result.courses} courses in file, ${changed ? `${result.created} added, ${result.updated} updated` : 'database already up to date'}`);
+      })
+      .catch((error: unknown) => logger.warn('Course catalog sync skipped', { error }));
   } catch (err: unknown) {
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[31m● Connection failed\x1b[0m');
     console.error('  ─────────────────────────────────────────');

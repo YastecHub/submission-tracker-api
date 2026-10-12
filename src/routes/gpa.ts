@@ -75,7 +75,7 @@ const importLimiter = rateLimit({
  *                     catalogCourseId: { type: string, format: uuid }
  *                     code: { type: string }
  *                     title: { type: string }
- *                     units: { type: integer, minimum: 1, maximum: 12 }
+ *                     units: { type: integer, minimum: 1, maximum: 6 }
  *                     grade: { type: string, enum: [A, B, C, D, E, F], nullable: true }
  *                     isCarryover: { type: boolean }
  *                     isRetake: { type: boolean }
