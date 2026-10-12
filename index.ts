@@ -18,6 +18,7 @@ import paymentReceiptRoutes from './src/routes/paymentReceipts';
 import transactionRoutes from './src/routes/transactions';
 import studentAuthRoutes from './src/routes/studentAuth';
 import announcementRoutes from './src/routes/announcements';
+import gpaRoutes from './src/routes/gpa';
 import { startNotificationDeliveryWorker } from './src/modules/announcements/application/notificationDeliveryWorker';
 import logger, { requestLogger } from './src/lib/logger';
 import { publicApiUrl } from './src/lib/publicUrl';
@@ -91,6 +92,8 @@ app.use(
 // Gzip all responses - cuts payload size by ~70%
 app.use(compression());
 
+// GPA CSV imports can be larger than the default 100 KB JSON limit.
+app.use('/api/gpa/import', express.json({ limit: '1mb' }));
 app.use(express.json());
 
 // Rate limiting: 200 req/min per IP for general API
@@ -139,6 +142,7 @@ app.use('/api/submissions', submissionRoutes);
 app.use('/api/payment-events', paymentEventRoutes);
 app.use('/api/payment-receipts', paymentReceiptRoutes);
 app.use('/api/bulletin', announcementRoutes);
+app.use('/api/gpa', gpaRoutes);
 app.use('/api', transactionRoutes);
 
 app.get('/', (_req: Request, res: Response) => {

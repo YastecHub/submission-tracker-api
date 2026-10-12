@@ -1,0 +1,21 @@
+# NEXIUM course catalog for the GPA tracker (Pharmacy, 5.0 scale).
+#
+# Fill in one row per course, then run:  npm run db:seed:catalog -- --dry-run
+# and, when the preview looks right:     npm run db:seed:catalog
+#
+# Columns:
+#   code       Course code, e.g. ABC 201 (unique across the whole catalog)
+#   title      Full course title
+#   units      Credit units (1-12)
+#   level      100, 200, 300, 400 or 500
+#   semester   1 or 2
+#   elective   yes/no (optional, default no)
+#   sort       Order within the semester (optional, default: file order)
+#
+# Changing a course later is safe: students keep the code/title/units they saved.
+# Removing a row does nothing unless you run with --deactivate-missing, which hides
+# the course from new semesters (existing student records are untouched).
+#
+# Lines starting with # are ignored. Example (remove the # to use):
+# ABC 201,Example Course Title,3,200,1,no,1
+code,title,units,level,semester,elective,sort

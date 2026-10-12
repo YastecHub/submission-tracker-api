@@ -45,6 +45,7 @@ model StudentAccount {
   updatedAt         DateTime           @updatedAt
   announcementReads AnnouncementRead[]
   pushSubscriptions StudentPushSubscription[]
+  gpaSemesters      GpaSemester[]
 }
 
 model StudentRoster {
@@ -425,4 +426,79 @@ model Transaction {
   @@index([isDeleted, type, occurredAt])
   @@index([isDeleted, category, occurredAt])
   @@index([recordedBy])
+}
+
+// ---------------------------------------------------------------------------
+// GPA tracker (student-only). 5.0 scale. Grades are self-reported by students.
+// ---------------------------------------------------------------------------
+
+enum GpaGrade {
+  A
+  B
+  C
+  D
+  E
+  F
+}
+
+enum GpaSemesterStatus {
+  draft
+  finalized
+}
+
+/// Department course list, maintained by the developer with `npm run db:seed:catalog`.
+model CourseCatalog {
+  id         String      @id @default(uuid())
+  code       String      @unique
+  title      String
+  units      Int
+  level      Int
+  semester   Int
+  isElective Boolean     @default(false)
+  isActive   Boolean     @default(true)
+  sortOrder  Int         @default(0)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  gpaCourses GpaCourse[]
+
+  @@index([isActive, level, semester, sortOrder])
+}
+
+model GpaSemester {
+  id           String            @id @default(uuid())
+  studentId    String
+  student      StudentAccount    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  level        Int
+  semester     Int
+  sessionLabel String?
+  status       GpaSemesterStatus @default(draft)
+  finalizedAt  DateTime?
+  version      Int               @default(1)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  courses      GpaCourse[]
+
+  @@unique([studentId, level, semester])
+}
+
+/// A course on a student's semester. Code, title and units are copied from the
+/// catalog when added, so later catalog changes never rewrite a student's history.
+model GpaCourse {
+  id              String         @id @default(uuid())
+  semesterId      String
+  semester        GpaSemester    @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  catalogCourseId String?
+  catalogCourse   CourseCatalog? @relation(fields: [catalogCourseId], references: [id], onDelete: SetNull)
+  code            String
+  title           String
+  units           Int
+  grade           GpaGrade?
+  isCarryover     Boolean        @default(false)
+  isRetake        Boolean        @default(false)
+  sortOrder       Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([semesterId, code])
+  @@index([catalogCourseId])
 }
