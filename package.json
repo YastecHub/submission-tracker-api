@@ -15,6 +15,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:catalog": "tsx prisma/seed-course-catalog.ts",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
