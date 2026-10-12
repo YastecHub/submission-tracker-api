@@ -22,17 +22,17 @@ export const getPaymentEventById = ok((req) =>
 );
 
 export const updatePaymentEvent = ok((req) =>
-  paymentEventService.update(routeParam(req.params.id), req.body, req.user)
+  paymentEventService.update(routeParam(req.params.id), req.body)
 );
 
 export const toggleClosePaymentEvent = ok((req) =>
-  paymentEventService.toggleClose(routeParam(req.params.id), req.user)
+  paymentEventService.toggleClose(routeParam(req.params.id))
 );
 
 export const extendPaymentEvent = ok((req) =>
-  paymentEventService.extend(routeParam(req.params.id), req.body.deadline, req.user)
+  paymentEventService.extend(routeParam(req.params.id), req.body.deadline)
 );
 
 export const deletePaymentEvent = ok((req) =>
-  paymentEventService.delete(routeParam(req.params.id), req.user)
+  paymentEventService.delete(routeParam(req.params.id))
 );

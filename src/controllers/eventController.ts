@@ -22,13 +22,13 @@ export const getEventById = ok((req) =>
 );
 
 export const toggleClose = ok((req) =>
-  submissionEventService.toggleClose(routeParam(req.params.id), req.user)
+  submissionEventService.toggleClose(routeParam(req.params.id))
 );
 
 export const extendEvent = ok((req) =>
-  submissionEventService.extend(routeParam(req.params.id), req.body.deadline, req.user)
+  submissionEventService.extend(routeParam(req.params.id), req.body.deadline)
 );
 
 export const deleteEvent = ok((req) =>
-  submissionEventService.delete(routeParam(req.params.id), req.user)
+  submissionEventService.delete(routeParam(req.params.id))
 );

@@ -39,7 +39,7 @@ export class AnnouncementAiAcceptanceConflictError extends Error {
   }
 }
 
-const staffDetailInclude = {
+const classRepDetailInclude = {
   creator: { select: { id: true, name: true, role: true } },
   updater: { select: { id: true, name: true, role: true } },
   publisher: { select: { id: true, name: true, role: true } },
@@ -115,7 +115,7 @@ export class AnnouncementRepository {
   }
 
   findAdminById(id: string) {
-    return prisma.announcement.findUnique({ where: { id }, include: staffDetailInclude });
+    return prisma.announcement.findUnique({ where: { id }, include: classRepDetailInclude });
   }
 
   findForAction(id: string) {
@@ -132,7 +132,7 @@ export class AnnouncementRepository {
     return prisma.$transaction(async (tx) => {
       const created = await tx.announcement.create({ data: params.data });
       await this.recordAiAcceptance(tx, params.aiAcceptance, created.id);
-      return tx.announcement.findUniqueOrThrow({ where: { id: created.id }, include: staffDetailInclude });
+      return tx.announcement.findUniqueOrThrow({ where: { id: created.id }, include: classRepDetailInclude });
     }, { maxWait: 15_000, timeout: 30_000 });
   }
 
@@ -182,7 +182,7 @@ export class AnnouncementRepository {
         });
       }
       await this.recordAiAcceptance(tx, params.aiAcceptance, current.id);
-      return tx.announcement.findUniqueOrThrow({ where: { id: params.id }, include: staffDetailInclude });
+      return tx.announcement.findUniqueOrThrow({ where: { id: params.id }, include: classRepDetailInclude });
     }, { maxWait: 15_000, timeout: 30_000 });
 
     if (!updated) return null;
@@ -247,7 +247,7 @@ export class AnnouncementRepository {
           createdBy: userId,
         },
       });
-      return tx.announcement.findUniqueOrThrow({ where: { id }, include: staffDetailInclude });
+      return tx.announcement.findUniqueOrThrow({ where: { id }, include: classRepDetailInclude });
     }, { maxWait: 15_000, timeout: 30_000 });
 
     if (!published) return null;

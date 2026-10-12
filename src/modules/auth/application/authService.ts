@@ -5,7 +5,7 @@ import { badRequest, forbidden, notFound, AppError } from '../../../shared/error
 import logger from '../../../lib/logger';
 import { sendWelcomeEmail } from '../../../utils/mailer';
 import { userRepository, UserRepository } from '../infrastructure/userRepository';
-import { canCreateStaffAccount } from '../domain/staffAccess';
+import { canCreateClassRepAccount } from '../domain/classRepAccess';
 
 function safeUser(user: { id: string; email: string; name: string; role: UserRole }) {
   return { id: user.id, email: user.email, name: user.name, role: user.role };
@@ -80,7 +80,7 @@ export class AuthService {
   }
 
   async createUser(callerRole: UserRole, input: { name?: string; email?: string; password?: string; role?: string }) {
-    if (!canCreateStaffAccount(callerRole)) throw forbidden('Only developers can create staff accounts');
+    if (!canCreateClassRepAccount(callerRole)) throw forbidden('Only developers can create class rep accounts');
     if (!input.name || !input.email || !input.password || !input.role) {
       throw badRequest('name, email, password, and role are required');
     }
@@ -105,7 +105,7 @@ export class AuthService {
     if (user.hasLoggedInBefore) return;
     await this.users.markHasLoggedInBefore(user.id);
     if (user.role !== 'dev') {
-      await sendWelcomeEmail(user.name, user.email, user.role as 'cr' | 'acr');
+      await sendWelcomeEmail(user.name, user.email, user.role);
     }
   }
 }

@@ -78,14 +78,9 @@ export class PaymentEventRepository {
     });
   }
 
-  findManageableById(id: string, user: Express.Request['user']) {
-    return prisma.paymentEvent.findFirst({
-      where: {
-        id,
-        ...(user!.role === 'dev' || user!.role === 'fin_sec' ? {} : { createdBy: user!.id }),
-        isDeleted: false,
-      },
-    });
+  /** Every class rep (CR, ACR, Fin Sec, Dev) can manage every active payment event. */
+  findManageableById(id: string) {
+    return prisma.paymentEvent.findFirst({ where: { id, isDeleted: false } });
   }
 
   receiptCounts(eventId: string) {

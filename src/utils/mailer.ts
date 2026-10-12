@@ -1,36 +1,40 @@
 import { Resend } from 'resend';
 
-const FEATURES_CR = `
+type ClassRepRole = 'cr' | 'acr' | 'fin_sec';
+
+const ROLE_LABELS: Record<ClassRepRole, string> = {
+  cr: 'Class Representative (CR)',
+  acr: 'Assistant Class Representative (ACR)',
+  fin_sec: 'Financial Secretary (Fin Sec)',
+};
+
+const SHORT_ROLE_LABELS: Record<ClassRepRole, string> = {
+  cr: 'Class Rep',
+  acr: 'Assistant Class Rep',
+  fin_sec: 'Financial Secretary',
+};
+
+// Every class rep has the same rights, so everyone gets the same guide.
+const CLASS_REP_FEATURES = `
 <ul style="padding-left:20px;line-height:1.9;color:#374151;">
-  <li><strong>Create Submission Events</strong> - set up assignments, attendance or lab events with a deadline</li>
-  <li><strong>Shareable Link + QR Code</strong> - share one link or QR and students fill in their details instantly</li>
-  <li><strong>Scan to Confirm</strong> - use the in-app QR scanner to confirm submissions physically in real time</li>
-  <li><strong>Manual Confirm</strong> - tap any submission to confirm it from the submissions list</li>
-  <li><strong>Live Dashboard</strong> - see total, confirmed, and pending counts update as students submit</li>
-  <li><strong>Search &amp; Filter</strong> - quickly find a student by name or matric number</li>
-  <li><strong>Export to Excel</strong> - download the full submission list as a spreadsheet anytime</li>
-  <li><strong>Close / Re-open Events</strong> - block new submissions when done, reopen if needed</li>
-  <li><strong>Push Notifications</strong> - enable browser notifications to be alerted the moment a student submits, even when you're not on the app</li>
+  <li><strong>Submission Events</strong> - create assignments, attendance or lab events with a deadline, then close, reopen or extend them</li>
+  <li><strong>Scan or Confirm</strong> - confirm student submissions by scanning their QR code or from the submissions list</li>
+  <li><strong>Payment Collections</strong> - collect dues, review receipts, confirm or reject them and scan collection tickets</li>
+  <li><strong>Class Ledger</strong> - record money in and out with proof, shown to students on the transparency page</li>
+  <li><strong>Nexium Bulletin</strong> - write, publish and track class announcements</li>
+  <li><strong>Export to Excel</strong> - download submission and payment lists anytime</li>
+  <li><strong>Push Notifications</strong> - get alerted the moment a student submits, even when you're not on the app</li>
 </ul>
 `;
 
-const FEATURES_ACR = `
-<ul style="padding-left:20px;line-height:1.9;color:#374151;">
-  <li><strong>Scan to Confirm</strong> - use the in-app QR scanner to confirm student submissions physically</li>
-  <li><strong>Manual Confirm</strong> - tap any submission in the list to mark it confirmed</li>
-  <li><strong>View Submissions</strong> - browse all submissions and track confirmed vs pending counts</li>
-  <li><strong>Search Students</strong> - find any student quickly by name or matric number</li>
-  <li><strong>Push Notifications</strong> - get instant browser alerts when students submit</li>
-</ul>
-`;
+function appUrl(): string {
+  const configured = process.env.CLIENT_URL?.split(',')[0]?.trim();
+  return configured || 'https://nexium31.app';
+}
 
-function buildEmail(name: string, role: 'cr' | 'acr'): string {
-  const roleLabel = role === 'cr' ? 'Class Representative (CR)' : 'Assistant Class Representative (ACR)';
-  const features = role === 'cr' ? FEATURES_CR : FEATURES_ACR;
-  const intro =
-    role === 'cr'
-      ? 'You have full control over submission events - from creating them to confirming and exporting records.'
-      : 'You can confirm student submissions by scanning QR codes or from the submissions list.';
+function buildEmail(name: string, role: ClassRepRole): string {
+  const roleLabel = ROLE_LABELS[role];
+  const intro = 'As a class rep you can manage submissions, payments, the class ledger and the Bulletin.';
 
   return `
 <!DOCTYPE html>
@@ -45,16 +49,16 @@ function buildEmail(name: string, role: 'cr' | 'acr'): string {
     </div>
 
     <div style="padding:32px;">
-      <p style="color:#111827;font-size:16px;margin-top:0;">Hi <strong>${name}</strong>,</p>
+      <p style="color:#111827;font-size:16px;margin-top:0;">Hi <strong>${escapeEmailHtml(name)}</strong>,</p>
       <p style="color:#374151;font-size:15px;">
         You've been set up as the <strong>${roleLabel}</strong> on NEXIUM. ${intro}
       </p>
 
       <h2 style="color:#111827;font-size:16px;margin-bottom:8px;">Here's what you can do:</h2>
-      ${features}
+      ${CLASS_REP_FEATURES}
 
       <div style="margin-top:28px;text-align:center;">
-        <a href="https://submitit.vercel.app"
+        <a href="${appUrl()}/login"
            style="background:linear-gradient(135deg,#7c3aed,#6b21a8);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:600;font-size:15px;display:inline-block;box-shadow:0 4px 12px rgba(107,33,168,0.3);">
           Open NEXIUM
         </a>
@@ -89,17 +93,16 @@ export function getMailFrom(): string {
 export async function sendWelcomeEmail(
   name: string,
   email: string,
-  role: 'cr' | 'acr'
+  role: ClassRepRole
 ): Promise<void> {
   if (!process.env.RESEND_API_KEY) return; // skip silently in dev if key not set
 
-  const roleLabel = role === 'cr' ? 'Class Representative' : 'Assistant Class Rep';
   const client = getResendClient();
 
   await client.emails.send({
     from: getMailFrom(),
     to: email,
-    subject: `Welcome to NEXIUM, ${name}! Here's your ${roleLabel} guide`,
+    subject: `Welcome to NEXIUM, ${name}! Here's your ${SHORT_ROLE_LABELS[role]} guide`,
     html: buildEmail(name, role),
   });
 }

@@ -1,6 +1,7 @@
 import swaggerJsdoc from 'swagger-jsdoc';
+import { publicApiUrl as resolvePublicApiUrl } from './lib/publicUrl';
 
-const publicApiUrl = process.env.PUBLIC_API_URL ?? process.env.RENDER_EXTERNAL_URL;
+const publicApiUrl = resolvePublicApiUrl();
 
 const servers = publicApiUrl
   ? [{ url: publicApiUrl.replace(/\/$/, ''), description: 'Production' }]
@@ -16,7 +17,7 @@ const options: swaggerJsdoc.Options = {
       version: '1.0.0',
       description:
         'NEXIUM - class submissions, payments, account transparency and Nexium Bulletin. ' +
-        'Staff manage class workflows and durable announcements; verified student accounts access payments, tickets, transparency and published updates.',
+        'Class reps manage class workflows and durable announcements; verified student accounts access payments, tickets, transparency and published updates.',
     },
     servers,
     components: {
@@ -243,7 +244,7 @@ const options: swaggerJsdoc.Options = {
             title: { type: 'string', maxLength: 180 },
             summary: { type: 'string', maxLength: 500 },
             content: { $ref: '#/components/schemas/AnnouncementDocument' },
-            rawSource: { type: 'string', maxLength: 50000, description: 'Staff-only original source material' },
+            rawSource: { type: 'string', maxLength: 50000, description: 'Class-rep-only original source material' },
             category: { type: 'string', enum: ['general', 'academic', 'practical', 'finance', 'event', 'opportunity', 'emergency'] },
             priority: { type: 'string', enum: ['normal', 'important', 'urgent'] },
             sourceType: { type: 'string', enum: ['official_class', 'educational_contribution', 'lecturer_information', 'external_information'] },

@@ -16,7 +16,7 @@ const credentialLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHe
  *   post:
  *     tags: [Student Auth]
  *     summary: Send a student registration verification code
- *     description: The matric number must exist in the roster and the email local part must sufficiently match the roster name.
+ *     description: The matric number must exist in the roster. Any email address can be used for now (the email-name rule is not enforced).
  *     requestBody:
  *       required: true
  *       content:
@@ -29,7 +29,7 @@ const credentialLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHe
  *               email: { type: string, format: email }
  *     responses:
  *       200: { description: Verification code sent }
- *       400: { description: Details do not match the roster }
+ *       400: { description: Invalid matric number or email }
  *       409: { description: Account already exists }
  *       429: { description: Too many attempts }
  * /api/student-auth/register:

@@ -7,12 +7,9 @@ import { AppError, badRequest, forbidden, notFound } from '../../../shared/error
 import logger from '../../../lib/logger';
 import { paymentReceiptRepository, PaymentReceiptRepository } from '../infrastructure/paymentReceiptRepository';
 import { cacheDeletePrefix } from '../../../utils/cache';
+import { isClassRep } from '../../auth/domain/classRepAccess';
 
 const MAX_EXPORT_ROWS = 10_000;
-
-function canManage(user: Express.Request['user'], event: { createdBy: string }): boolean {
-  return user!.role === 'dev' || user!.role === 'fin_sec' || event.createdBy === user!.id;
-}
 
 export class PaymentReceiptService {
   constructor(private readonly repository: PaymentReceiptRepository) { }
@@ -98,7 +95,7 @@ export class PaymentReceiptService {
   async confirm(id: string, input: { note?: string }, user: Express.Request['user']) {
     const receipt = await this.repository.findWithEventAndTransaction(id);
     if (!receipt) throw notFound('Receipt not found');
-    if (!canManage(user, receipt.event)) throw forbidden('You are not allowed to confirm this receipt');
+    if (!isClassRep(user?.role)) throw forbidden('You are not allowed to confirm this receipt');
     const ticketQrCode = receipt.event.hasTickets && !receipt.ticketQrCode ? await generateQR(receipt.id) : undefined;
     const updated = await this.repository.confirm(id, { confirmedBy: user!.name, recordedBy: user!.id, note: input.note, ticketQrCode });
     cacheDeletePrefix('ledger:');
@@ -108,7 +105,7 @@ export class PaymentReceiptService {
   async reject(id: string, input: { note?: string }, user: Express.Request['user']) {
     const receipt = await this.repository.findWithEventAndTransaction(id);
     if (!receipt) throw notFound('Receipt not found');
-    if (!canManage(user, receipt.event)) throw forbidden('You are not allowed to reject this receipt');
+    if (!isClassRep(user?.role)) throw forbidden('You are not allowed to reject this receipt');
     const updated = await this.repository.reject(id, { confirmedBy: user!.name, note: input.note });
     cacheDeletePrefix('ledger:');
     return updated;
@@ -174,9 +171,9 @@ export class PaymentReceiptService {
     let receipt = normalized.length === 8 ? await this.repository.findTicketByShortCode(normalized) : await this.repository.findTicketById(normalized);
     if (receipt && !receipt.event.hasTickets) receipt = null;
     if (!receipt) throw notFound('Ticket not found');
-    if (receipt.status === 'rejected') throw forbidden('This ticket has been rejected - student should contact fin sec');
+    if (receipt.status === 'rejected') throw forbidden('This ticket has been rejected - student should contact a class rep');
     if (receipt.status !== 'confirmed') throw forbidden('Payment has not been confirmed yet');
-    if (!canManage(user, receipt.event)) throw forbidden('You are not allowed to claim this ticket');
+    if (!isClassRep(user?.role)) throw forbidden('You are not allowed to claim this ticket');
     if (receipt.isClaimed) return { alreadyClaimed: true, receipt: { fullName: receipt.fullName, matricNumber: receipt.matricNumber, claimedBy: receipt.claimedBy, claimedAt: receipt.claimedAt } };
 
     const result = await this.repository.claim(receipt.id, user!.name);

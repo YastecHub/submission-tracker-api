@@ -28,11 +28,11 @@ import {
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
 import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
-import { STAFF_ROLES } from '../modules/auth/domain/staffAccess';
+import { CLASS_ROLES } from '../modules/auth/domain/classRepAccess';
 import upload from '../middleware/uploadMiddleware';
 
 const router = Router();
-const requireStaff = requireRole(...STAFF_ROLES);
+const requireClassRep = requireRole(...CLASS_ROLES);
 const assistantLimiter = rateLimit({
   windowMs: 15 * 60_000,
   max: 8,
@@ -216,7 +216,7 @@ router.post('/feed/:id/acknowledge', studentAuthMiddleware, acknowledgeAnnouncem
  * @openapi
  * /api/bulletin/admin/{id}/analytics:
  *   get:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: Get aggregate read/acknowledgement analytics for an announcement
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -229,7 +229,7 @@ router.post('/feed/:id/acknowledge', studentAuthMiddleware, acknowledgeAnnouncem
  * @openapi
  * /api/bulletin/admin/{id}/outstanding:
  *   get:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: List students who have not acknowledged a critical announcement
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -240,17 +240,17 @@ router.post('/feed/:id/acknowledge', studentAuthMiddleware, acknowledgeAnnouncem
  *       200: { description: Paginated list of students with acknowledgement status }
  *       404: { description: Announcement not found or does not require acknowledgement }
  */
-router.get('/admin/:id/analytics', authMiddleware, requireStaff, getAnnouncementAnalytics);
-router.get('/admin/:id/outstanding', authMiddleware, requireStaff, getAnnouncementOutstandingStudents);
+router.get('/admin/:id/analytics', authMiddleware, requireClassRep, getAnnouncementAnalytics);
+router.get('/admin/:id/outstanding', authMiddleware, requireClassRep, getAnnouncementOutstandingStudents);
 
-router.get('/admin/payment-options', authMiddleware, requireStaff, listAnnouncementPaymentOptions);
+router.get('/admin/payment-options', authMiddleware, requireClassRep, listAnnouncementPaymentOptions);
 
 /**
  * @openapi
  * /api/bulletin/admin/organize:
  *   post:
- *     tags: [Nexium Bulletin Staff]
- *     summary: Suggest a structured draft from staff-provided source material
+ *     tags: [Nexium Bulletin Class Reps]
+ *     summary: Suggest a structured draft from class-rep-provided source material
  *     description: Returns reviewable suggestions only. It never saves or publishes announcement content.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -261,7 +261,7 @@ router.get('/admin/payment-options', authMiddleware, requireStaff, listAnnouncem
  *             type: object
  *             required: [rawSource]
  *             properties:
- *               rawSource: { type: string, minLength: 20, maxLength: 30000 }
+ *               rawSource: { type: string, minLength: 20, maxLength: 5000 }
  *               announcementId: { type: string, format: uuid, nullable: true }
  *     responses:
  *       200:
@@ -273,13 +273,13 @@ router.get('/admin/payment-options', authMiddleware, requireStaff, listAnnouncem
  *       502: { description: A safe, validated suggestion could not be produced }
  *       503: { description: Announcement assistant is not configured }
  */
-router.post('/admin/organize', authMiddleware, requireStaff, assistantLimiter, organizeAnnouncement);
+router.post('/admin/organize', authMiddleware, requireClassRep, assistantLimiter, organizeAnnouncement);
 
 /**
  * @openapi
  * /api/bulletin/admin/{id}/media:
  *   post:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: Upload multiple version-checked announcement images
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -300,7 +300,7 @@ router.post('/admin/organize', authMiddleware, requireStaff, assistantLimiter, o
  *       201: { description: Images uploaded and announcement version advanced }
  *       409: { description: Announcement changed before upload completed }
  *   patch:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: Save image order, alt text, captions and section assignments
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -320,14 +320,14 @@ router.post('/admin/organize', authMiddleware, requireStaff, assistantLimiter, o
  *       200: { description: Image details saved and announcement version advanced }
  *       409: { description: Announcement changed before image details were saved }
  */
-router.post('/admin/:id/media', authMiddleware, requireStaff, mediaUploadLimiter, handleMediaUpload, uploadAnnouncementMedia);
-router.patch('/admin/:id/media', authMiddleware, requireStaff, updateAnnouncementMedia);
+router.post('/admin/:id/media', authMiddleware, requireClassRep, mediaUploadLimiter, handleMediaUpload, uploadAnnouncementMedia);
+router.patch('/admin/:id/media', authMiddleware, requireClassRep, updateAnnouncementMedia);
 
 /**
  * @openapi
  * /api/bulletin/admin/{id}/media/{mediaId}:
  *   delete:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: Remove one version-checked announcement image
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -347,13 +347,13 @@ router.patch('/admin/:id/media', authMiddleware, requireStaff, updateAnnouncemen
  *       200: { description: Image removed and announcement version advanced }
  *       409: { description: Announcement changed before image removal }
  */
-router.delete('/admin/:id/media/:mediaId', authMiddleware, requireStaff, deleteAnnouncementMedia);
+router.delete('/admin/:id/media/:mediaId', authMiddleware, requireClassRep, deleteAnnouncementMedia);
 
 /**
  * @openapi
  * /api/bulletin/admin:
  *   get:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: List drafts, published announcements and archives
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -362,9 +362,9 @@ router.delete('/admin/:id/media/:mediaId', authMiddleware, requireStaff, deleteA
  *       - { in: query, name: status, schema: { type: string, enum: [draft, published, archived] } }
  *       - { in: query, name: search, schema: { type: string } }
  *     responses:
- *       200: { description: Paginated staff announcement list }
+ *       200: { description: Paginated class rep announcement list }
  *   post:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: Create an announcement draft
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -380,23 +380,23 @@ router.delete('/admin/:id/media/:mediaId', authMiddleware, requireStaff, deleteA
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-router.get('/admin', authMiddleware, requireStaff, listAnnouncementsAdmin);
-router.post('/admin', authMiddleware, requireStaff, createAnnouncement);
+router.get('/admin', authMiddleware, requireClassRep, listAnnouncementsAdmin);
+router.post('/admin', authMiddleware, requireClassRep, createAnnouncement);
 
 /**
  * @openapi
  * /api/bulletin/admin/{id}:
  *   get:
- *     tags: [Nexium Bulletin Staff]
- *     summary: Get an announcement for staff review
+ *     tags: [Nexium Bulletin Class Reps]
+ *     summary: Get an announcement for class rep review
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200: { description: Complete staff announcement including raw source and revisions }
+ *       200: { description: Complete class rep announcement including raw source and revisions }
  *       404: { description: Announcement not found }
  *   patch:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: Save a version-checked announcement update
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -410,16 +410,16 @@ router.post('/admin', authMiddleware, requireStaff, createAnnouncement);
  *       200: { description: Announcement saved }
  *       409: { description: Announcement was changed by another editor }
  */
-router.get('/admin/:id', authMiddleware, requireStaff, getAnnouncementAdmin);
-router.patch('/admin/:id', authMiddleware, requireStaff, updateAnnouncement);
+router.get('/admin/:id', authMiddleware, requireClassRep, getAnnouncementAdmin);
+router.patch('/admin/:id', authMiddleware, requireClassRep, updateAnnouncement);
 
 /**
  * @openapi
  * /api/bulletin/admin/{id}/publish:
  *   post:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: Publish a reviewed draft
- *     description: CR/dev publish non-finance content; Fin Sec/dev publish finance content.
+ *     description: Any class rep (CR, ACR, Fin Sec or Dev) can publish any category.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
@@ -438,13 +438,13 @@ router.patch('/admin/:id', authMiddleware, requireStaff, updateAnnouncement);
  *       403: { description: Role cannot publish this category }
  *       409: { description: Announcement changed before publication }
  */
-router.post('/admin/:id/publish', authMiddleware, requireStaff, publishAnnouncement);
+router.post('/admin/:id/publish', authMiddleware, requireClassRep, publishAnnouncement);
 
 /**
  * @openapi
  * /api/bulletin/admin/{id}/archive:
  *   post:
- *     tags: [Nexium Bulletin Staff]
+ *     tags: [Nexium Bulletin Class Reps]
  *     summary: Remove a published announcement from the active feed without deleting it
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -454,6 +454,6 @@ router.post('/admin/:id/publish', authMiddleware, requireStaff, publishAnnouncem
  *       403: { description: Role cannot archive this category }
  *       409: { description: Announcement changed before archival }
  */
-router.post('/admin/:id/archive', authMiddleware, requireStaff, archiveAnnouncement);
+router.post('/admin/:id/archive', authMiddleware, requireClassRep, archiveAnnouncement);
 
 export default router;
