@@ -1,13 +1,13 @@
 # NEXIUM course catalog for the GPA tracker (Pharmacy, 5.0 scale).
 #
-# Fill in one row per course, then run:  npm run db:seed:catalog -- --dry-run
-# and, when the preview looks right:     npm run db:seed:catalog
+# Every deploy syncs this file to the database automatically (Heroku release phase).
+# To apply it by hand:  npm run db:seed:catalog -- --dry-run   then   npm run db:seed:catalog
 #
 # Columns:
 #   code       Course code, e.g. ABC 201 (unique across the whole catalog)
 #   title      Full course title
 #   units      Credit units (1-12)
-#   level      100, 200, 300, 400 or 500
+#   level      100, 200, 300, 400, 500 or 600
 #   semester   1 or 2
 #   elective   yes/no (optional, default no)
 #   sort       Order within the semester (optional, default: file order)
@@ -19,3 +19,27 @@
 # Lines starting with # are ignored. Example (remove the # to use):
 # ABC 201,Example Course Title,3,200,1,no,1
 code,title,units,level,semester,elective,sort
+# ---- 100 level, first semester (UNILAG Pharm. D. course form, 2025/2026) ----
+BIO 101,General Biology,2,100,1,no
+BIO 107,General Practical Biology I,1,100,1,no
+CHM-CM 101,General Chemistry,2,100,1,no
+CHM 107,General Chemistry Practical I,1,100,1,no
+COS 101,Introduction to Computing Sciences,3,100,1,no
+GST 111,Communication in English,2,100,1,no
+MTH 101,Elementary Mathematics I,2,100,1,no
+PCY 101,Introduction to Pharmacy,1,100,1,no
+PHY-CM 101,General Physics I,2,100,1,no
+PHY-CM 103,General Physics III,2,100,1,no
+PHY-CM 107,General Practical Physics I,1,100,1,no
+ZOO 101,The Mammalian Body,2,100,1,no
+# ---- 100 level, second semester ----
+BIO 102,General Biology II,2,100,2,no
+BIO 108,General Practical Biology II,1,100,2,no
+CHM-CM 102,General Chemistry I,2,100,2,no
+CHM-CM 108,General Practical Chemistry II,1,100,2,no
+GST 112,Nigerian Peoples and Culture,2,100,2,no
+MTH 102,Elementary Mathematics II,2,100,2,no
+PHY-CM 102,General Physics II,2,100,2,no
+PHY-CM 104,General Physics IV,2,100,2,no
+PHY-CM 108,General Practical Physics II,1,100,2,no
+ZOO 102,Animal Diversity,2,100,2,no

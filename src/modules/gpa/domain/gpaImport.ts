@@ -106,7 +106,7 @@ export function parseImportCsv(text: string): { rows: ImportRow[]; issues: Impor
     const fail = (column: Column, message: string) => rowIssues.push({ line: record.line, column, message });
 
     const level = parseLevel(cell('level'));
-    if (!level) fail('level', `"${cell('level')}" is not a level. Use 100, 200, 300, 400 or 500.`);
+    if (!level) fail('level', `"${cell('level')}" is not a level. Use 100, 200, 300, 400, 500 or 600.`);
     const semester = parseSemester(cell('semester'));
     if (!semester) fail('semester', `"${cell('semester')}" is not a semester. Use 1 or 2.`);
 

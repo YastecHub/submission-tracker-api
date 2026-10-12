@@ -125,6 +125,25 @@ export async function sendStudentRegistrationOtp(name: string, email: string, co
   if (result.error) throw new Error(result.error.message);
 }
 
+export async function sendStudentPasswordResetOtp(name: string, email: string, code: string): Promise<void> {
+  if (!process.env.RESEND_API_KEY) throw new Error('Email delivery is not configured');
+  const client = getResendClient();
+  const result = await client.emails.send({
+    from: getMailFrom(),
+    to: email,
+    subject: 'Reset your NEXIUM password',
+    html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#111827">
+      <h2>Reset your password</h2>
+      <p>Hello ${escapeEmailHtml(name)},</p>
+      <p>Someone asked to reset the password for your NEXIUM student account. Your reset code is:</p>
+      <p style="font-size:32px;font-weight:700;letter-spacing:8px">${code}</p>
+      <p>Enter it on the sign-in page with your new password. The code expires in 10 minutes.</p>
+      <p>If you did not ask for this, ignore this email: your password stays the same.</p>
+    </div>`,
+  });
+  if (result.error) throw new Error(result.error.message);
+}
+
 function escapeEmailHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
 }

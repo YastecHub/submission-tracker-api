@@ -15,6 +15,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["index.ts", "src/**/*.ts", "prisma/seed.ts"],
+  "include": ["index.ts", "src/**/*.ts", "prisma/seed.ts", "prisma/seed-course-catalog.ts"],
   "exclude": ["node_modules", "dist"]
 }

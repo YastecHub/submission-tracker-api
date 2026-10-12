@@ -5,12 +5,13 @@
  *   npm run db:seed:catalog                           upsert every course in the file
  *   npm run db:seed:catalog -- --deactivate-missing   also hide courses no longer in the file
  *   npm run db:seed:catalog -- --file path/to.csv     use a different file
+ *   npm run db:sync:catalog                           compiled version, run by Heroku's release phase
  *
  * Courses are matched by code. Students' saved courses are snapshots, so changing a
  * title or units here never rewrites anyone's history.
  */
 import 'dotenv/config';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { parseCsv } from '../src/modules/gpa/domain/csv';
@@ -25,6 +26,12 @@ interface CatalogRow {
   semester: number;
   isElective: boolean;
   sortOrder: number;
+}
+
+function defaultCatalogFile(): string {
+  // tsx runs this from prisma/, the compiled copy runs from dist/prisma/.
+  const candidates = [join(__dirname, 'data', 'course-catalog.csv'), join(process.cwd(), 'prisma', 'data', 'course-catalog.csv')];
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 function argValue(name: string): string | undefined {
@@ -63,7 +70,7 @@ export function readCatalogCsv(text: string): { rows: CatalogRow[]; errors: stri
     if (!title) errors.push(`${where}: title is required`);
     if (title.length > 150) errors.push(`${where}: title is too long`);
     if (!Number.isInteger(units) || units < 1 || units > 12) errors.push(`${where}: units must be 1-12`);
-    if (!level) errors.push(`${where}: level must be 100-500`);
+    if (!level) errors.push(`${where}: level must be 100-600`);
     if (!semester) errors.push(`${where}: semester must be 1 or 2`);
     if (isElective === null) errors.push(`${where}: elective must be yes or no`);
     if (!Number.isInteger(sortOrder)) errors.push(`${where}: sort must be a whole number`);
@@ -79,7 +86,7 @@ export function readCatalogCsv(text: string): { rows: CatalogRow[]; errors: stri
 }
 
 async function main(): Promise<void> {
-  const file = argValue('--file') ?? join(__dirname, 'data', 'course-catalog.csv');
+  const file = argValue('--file') ?? defaultCatalogFile();
   const dryRun = process.argv.includes('--dry-run');
   const deactivateMissing = process.argv.includes('--deactivate-missing');
 
@@ -90,8 +97,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   if (rows.length === 0) {
-    console.error(`No courses in ${file}. Add rows below the header first.`);
-    process.exit(1);
+    console.warn(`No courses in ${file}, so there is nothing to sync.`);
+    return;
   }
 
   const prisma = new PrismaClient({ datasources: { db: { url: process.env.DIRECT_URL ?? process.env.DATABASE_URL } } });

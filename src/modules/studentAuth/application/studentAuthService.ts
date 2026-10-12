@@ -4,12 +4,35 @@ import { randomInt } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { AppError, badRequest, notFound } from '../../../shared/errors/AppError';
 import logger from '../../../lib/logger';
-import { sendStudentRegistrationOtp } from '../../../utils/mailer';
+import { sendStudentPasswordResetOtp, sendStudentRegistrationOtp } from '../../../utils/mailer';
 import { studentAccountRepository, StudentAccountRepository } from '../infrastructure/studentAccountRepository';
+import { forgetStudentSession } from './studentSessions';
 
 const OTP_LIFETIME_MS = 10 * 60_000;
 const OTP_RESEND_COOLDOWN_MS = 60_000;
 const MAX_OTP_ATTEMPTS = 5;
+
+/** Same answer whether or not an account matched, so the form can't be used to probe accounts. */
+const RESET_REQUESTED = {
+  message: 'If an account matches, a reset code has been sent to the email linked to it.',
+  expiresInSeconds: OTP_LIFETIME_MS / 1000,
+  resendAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000,
+};
+const INVALID_RESET_CODE = 'The reset code is invalid or expired';
+
+export interface StudentAuthMailer {
+  sendRegistrationOtp(name: string, email: string, code: string): Promise<void>;
+  sendPasswordResetOtp(name: string, email: string, code: string): Promise<void>;
+}
+
+const defaultMailer: StudentAuthMailer = {
+  sendRegistrationOtp: sendStudentRegistrationOtp,
+  sendPasswordResetOtp: sendStudentPasswordResetOtp,
+};
+
+function newOtp(): string {
+  return randomInt(0, 1_000_000).toString().padStart(6, '0');
+}
 
 function safeStudent(student: { id: string; matricNumber: string; email: string; fullName: string }) {
   return { id: student.id, matricNumber: student.matricNumber, email: student.email, fullName: student.fullName };
@@ -38,7 +61,10 @@ function validatePassword(password?: string): asserts password is string {
 }
 
 export class StudentAuthService {
-  constructor(private readonly students: StudentAccountRepository) {}
+  constructor(
+    private readonly students: StudentAccountRepository,
+    private readonly mailer: StudentAuthMailer = defaultMailer,
+  ) {}
 
   async requestRegistrationOtp(input: { matricNumber?: string; email?: string }) {
     const matricNumber = normalizeMatric(input.matricNumber);
@@ -56,7 +82,7 @@ export class StudentAuthService {
       throw new AppError(429, 'Please wait before requesting another code');
     }
 
-    const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+    const code = newOtp();
     await this.students.saveRegistrationOtp({
       matricNumber,
       email,
@@ -64,7 +90,7 @@ export class StudentAuthService {
       expiresAt: new Date(Date.now() + OTP_LIFETIME_MS),
     });
     try {
-      await sendStudentRegistrationOtp(record.fullName, email, code);
+      await this.mailer.sendRegistrationOtp(record.fullName, email, code);
     } catch (error) {
       await this.students.deleteRegistrationOtp(matricNumber);
       logger.error('[student registration email] Failed to send OTP:', { error, email, matricNumber });
@@ -115,6 +141,66 @@ export class StudentAuthService {
     const student = await this.students.findByMatric(matricNumber);
     if (!student || !(await bcrypt.compare(input.password, student.passwordHash))) throw new AppError(401, 'Invalid matric number or password');
     return { token: issueToken(student), student: safeStudent(student) };
+  }
+
+  private findByIdentifier(identifier: string) {
+    return identifier.includes('@')
+      ? this.students.findByEmail(normalizeEmail(identifier))
+      : this.students.findByMatric(normalizeMatric(identifier));
+  }
+
+  /** Forgot password, step 1: email a 6-digit code to the account's address. */
+  async requestPasswordReset(input: { identifier?: string }) {
+    const identifier = input.identifier?.trim() ?? '';
+    if (!identifier || identifier.length > 254) throw badRequest('Enter your matric number or email');
+
+    const student = await this.findByIdentifier(identifier);
+    if (!student) return RESET_REQUESTED;
+
+    const existing = await this.students.findPasswordReset(student.id);
+    // Within the cooldown the earlier code is still valid, so there is nothing new to send.
+    if (existing && Date.now() - existing.lastSentAt.getTime() < OTP_RESEND_COOLDOWN_MS) return RESET_REQUESTED;
+
+    const code = newOtp();
+    await this.students.savePasswordReset({
+      studentId: student.id,
+      codeHash: await bcrypt.hash(code, 10),
+      expiresAt: new Date(Date.now() + OTP_LIFETIME_MS),
+    });
+    try {
+      await this.mailer.sendPasswordResetOtp(student.fullName, student.email, code);
+    } catch (error) {
+      await this.students.deletePasswordReset(student.id);
+      logger.error('[student password reset email] Failed to send OTP:', { error, studentId: student.id });
+      throw new AppError(503, 'We could not send the reset email. Please try again later.');
+    }
+    return RESET_REQUESTED;
+  }
+
+  /** Forgot password, step 2: check the code, set the new password and sign the student in. */
+  async completePasswordReset(input: { identifier?: string; code?: string; password?: string }) {
+    const identifier = input.identifier?.trim() ?? '';
+    const code = input.code?.trim() ?? '';
+    validatePassword(input.password);
+    if (!identifier || !/^\d{6}$/.test(code)) throw badRequest('Your matric number or email and the 6-digit code are required');
+
+    const student = await this.findByIdentifier(identifier);
+    if (!student) throw badRequest(INVALID_RESET_CODE);
+    const challenge = await this.students.findPasswordReset(student.id);
+    if (!challenge) throw badRequest(INVALID_RESET_CODE);
+    if (challenge.expiresAt.getTime() <= Date.now() || challenge.attempts >= MAX_OTP_ATTEMPTS) {
+      await this.students.deletePasswordReset(student.id);
+      throw badRequest(INVALID_RESET_CODE);
+    }
+    if (!(await bcrypt.compare(code, challenge.codeHash))) {
+      await this.students.incrementPasswordResetAttempts(student.id);
+      throw badRequest(INVALID_RESET_CODE);
+    }
+
+    const account = await this.students.resetPassword(student.id, await bcrypt.hash(input.password, 10), new Date());
+    // Sessions on other devices end on their next request.
+    forgetStudentSession(student.id);
+    return { token: issueToken(account), student: safeStudent(account), message: 'Password updated' };
   }
 
   async me(id: string) {

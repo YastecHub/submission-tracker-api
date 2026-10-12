@@ -64,6 +64,12 @@ jobs:
       - name: Check migrations match schema.prisma
         run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
 
+      # The course catalog CSV must parse and seed cleanly; the dry run should then report 0 new / 0 changed.
+      - name: Seed the course catalog
+        run: |
+          npm run db:seed:catalog
+          npm run db:seed:catalog -- --dry-run
+
       - name: Run tests
         run: npm test
 
@@ -99,6 +105,7 @@ jobs:
         run: |
           npx prisma migrate status || true
           npx prisma migrate deploy
+          npm run db:seed:catalog
 
       - name: Production migration secrets missing
         if: env.DIRECT_URL == ''

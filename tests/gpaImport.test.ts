@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseCsv } from '../src/modules/gpa/domain/csv';
-import { parseImportCsv } from '../src/modules/gpa/domain/gpaImport';
+import { parseImportCsv, parseLevel } from '../src/modules/gpa/domain/gpaImport';
 import { readCatalogCsv } from '../prisma/seed-course-catalog';
 
 test('CSV reader handles quotes, commas and newlines in quotes, CRLF, BOM and comments', () => {
@@ -33,7 +33,7 @@ test('import accepts friendly values and the template header', () => {
 test('import reports every bad row with its line and column', () => {
   const { rows, issues } = parseImportCsv([
     'level,semester,code,units,grade,carryover',
-    '600,1,PCT 201,3,A,no',
+    '700,1,PCT 201,3,A,no',
     '200,3,PCT 202,0,Z,maybe',
     '200,1,PCT 203,3,B,no',
     '200,1,pct203,2,C,no',
@@ -66,4 +66,10 @@ test('catalog seed file is validated before anything is written', () => {
   assert.deepEqual(ok.rows[0], { code: 'ABC 201', title: 'Example', units: 3, level: 200, semester: 1, isElective: false, sortOrder: 1 });
   const bad = readCatalogCsv('code,title,units,level,semester\nABC 201,,0,700,3\nabc 201,Dup,2,200,1\n');
   assert.equal(bad.errors.length, 5);
+});
+
+test('levels run 100L to 600L (six-year Pharm. D.)', () => {
+  assert.equal(parseLevel('600'), 600);
+  assert.equal(parseLevel('600L'), 600);
+  assert.equal(parseLevel('700'), null);
 });
