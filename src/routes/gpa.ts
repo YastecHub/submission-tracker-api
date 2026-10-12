@@ -62,7 +62,7 @@ const importLimiter = rateLimit({
  *             required: [level, semester]
  *             properties:
  *               id: { type: string, format: uuid }
- *               level: { type: integer, enum: [100, 200, 300, 400, 500] }
+ *               level: { type: integer, enum: [100, 200, 300, 400, 500, 600] }
  *               semester: { type: integer, enum: [1, 2] }
  *               sessionLabel: { type: string, example: 2025/2026 }
  *               courses:
@@ -75,7 +75,7 @@ const importLimiter = rateLimit({
  *                     catalogCourseId: { type: string, format: uuid }
  *                     code: { type: string }
  *                     title: { type: string }
- *                     units: { type: integer, minimum: 1, maximum: 12 }
+ *                     units: { type: integer, minimum: 1, maximum: 6 }
  *                     grade: { type: string, enum: [A, B, C, D, E, F], nullable: true }
  *                     isCarryover: { type: boolean }
  *                     isRetake: { type: boolean }

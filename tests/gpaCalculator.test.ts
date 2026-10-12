@@ -58,4 +58,6 @@ test('course codes are normalised so spacing and case do not create duplicates',
   assert.equal(normalizeCourseCode(' PCT   201 '), 'PCT 201');
   assert.equal(normalizeCourseCode('gst 102b'), 'GST 102B');
   assert.equal(normalizeCourseCode('odd-code 1'), 'ODD-CODE 1');
+  assert.equal(normalizeCourseCode('CHM-CM101'), 'CHM-CM 101');
+  assert.equal(normalizeCourseCode('phy-cm 107'), 'PHY-CM 107');
 });

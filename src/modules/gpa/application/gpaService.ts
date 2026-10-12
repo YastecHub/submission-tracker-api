@@ -19,8 +19,8 @@ import {
   type GpaSemesterRecord,
   type ImportSemesterPlan,
 } from '../infrastructure/gpaRepository';
+import { CATALOG_CACHE_KEY } from '../infrastructure/catalogSync';
 
-const CATALOG_CACHE_KEY = 'gpa:catalog';
 const CATALOG_CACHE_MS = 5 * 60_000;
 
 export interface GpaCourseDto {

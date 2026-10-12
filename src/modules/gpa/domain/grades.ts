@@ -7,12 +7,14 @@ export type Grade = (typeof GRADES)[number];
 
 export const GRADE_POINTS: Record<Grade, number> = { A: 5, B: 4, C: 3, D: 2, E: 1, F: 0 };
 
-export const LEVELS = [100, 200, 300, 400, 500] as const;
+/** Pharm. D. is a six-year programme: 100L to 600L. */
+export const LEVELS = [100, 200, 300, 400, 500, 600] as const;
 export type Level = (typeof LEVELS)[number];
 export const SEMESTERS = [1, 2] as const;
 export type SemesterNumber = (typeof SEMESTERS)[number];
 
-export const MAX_UNITS_PER_COURSE = 12;
+/** The heaviest course in the programme carries 6 units. */
+export const MAX_UNITS_PER_COURSE = 6;
 export const MAX_COURSES_PER_SEMESTER = 30;
 
 /** Standard NUC degree classes on a 5.0 scale. */
@@ -42,7 +44,7 @@ export function isSemesterNumber(value: unknown): value is SemesterNumber {
  */
 export function normalizeCourseCode(value: string): string {
   const compact = value.trim().toUpperCase().replace(/\s+/g, ' ');
-  const match = compact.replace(/\s+/g, '').match(/^([A-Z]{2,5})(\d{3,4}[A-Z]?)$/);
+  const match = compact.replace(/\s+/g, '').match(/^([A-Z]{2,5}(?:-[A-Z]{1,5})?)(\d{3,4}[A-Z]?)$/);
   return match ? `${match[1]} ${match[2]}` : compact;
 }
 

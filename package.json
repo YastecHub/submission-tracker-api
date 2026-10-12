@@ -16,6 +16,7 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:catalog": "tsx prisma/seed-course-catalog.ts",
+    "db:sync:catalog": "node dist/prisma/seed-course-catalog.js",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {

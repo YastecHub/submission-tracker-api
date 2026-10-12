@@ -101,7 +101,7 @@ export function semesterContentInput(value: unknown): SemesterContentInput {
 export function newSemesterInput(value: unknown): NewSemesterInput {
   const input = record(value, 'Semester details are invalid');
   const level = typeof input.level === 'number' ? input.level : Number(input.level);
-  if (!isLevel(level)) throw badRequest('Level must be 100, 200, 300, 400 or 500');
+  if (!isLevel(level)) throw badRequest('Level must be 100, 200, 300, 400, 500 or 600');
   const semester = typeof input.semester === 'number' ? input.semester : Number(input.semester);
   if (!isSemesterNumber(semester)) throw badRequest('Semester must be 1 or 2');
   if (input.id !== undefined && input.id !== null && (typeof input.id !== 'string' || !UUID_PATTERN.test(input.id))) {

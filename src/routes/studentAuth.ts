@@ -1,11 +1,21 @@
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
-import { getStudent, loginStudent, registerStudent, requestStudentRegistrationOtp } from '../controllers/studentAuthController';
+import {
+  getStudent,
+  loginStudent,
+  registerStudent,
+  requestStudentPasswordReset,
+  requestStudentRegistrationOtp,
+  resetStudentPassword,
+} from '../controllers/studentAuthController';
 import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
 
 const router = Router();
 const credentialLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many attempts, please try again later.' } });
+// Separate budget so a few reset attempts never lock a shared campus IP out of signing in.
+const passwordResetLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many password reset attempts, please try again later.' } });
 
 /**
  * @openapi
@@ -67,6 +77,43 @@ const credentialLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHe
  *     responses:
  *       200: { description: Student account and JWT }
  *       401: { description: Invalid credentials }
+ * /api/student-auth/password-reset/request:
+ *   post:
+ *     tags: [Student Auth]
+ *     summary: Forgot password - email a 6-digit reset code
+ *     description: Accepts the matric number or the account email. The answer is the same whether or not an account matches. The code goes to the email on the account, expires in 10 minutes, and a new one can be sent after 60 seconds.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [identifier]
+ *             properties:
+ *               identifier: { type: string, description: Matric number or account email }
+ *     responses:
+ *       200: { description: Reset code sent if an account matched }
+ *       429: { description: Too many attempts }
+ *       503: { description: The email could not be sent }
+ * /api/student-auth/password-reset:
+ *   post:
+ *     tags: [Student Auth]
+ *     summary: Forgot password - set a new password with the emailed code
+ *     description: Signs the student in. Sessions on other devices end on their next request. A code allows 5 wrong attempts.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [identifier, code, password]
+ *             properties:
+ *               identifier: { type: string }
+ *               code: { type: string, pattern: '^[0-9]{6}$' }
+ *               password: { type: string, minLength: 8, maxLength: 128 }
+ *     responses:
+ *       200: { description: Password changed; student account and JWT }
+ *       400: { description: Invalid or expired code, or weak password }
  * /api/student-auth/me:
  *   get:
  *     tags: [Student Auth]
@@ -84,6 +131,8 @@ const credentialLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHe
 router.post('/register/request-code', credentialLimiter, requestStudentRegistrationOtp);
 router.post('/register', credentialLimiter, registerStudent);
 router.post('/login', credentialLimiter, loginStudent);
+router.post('/password-reset/request', passwordResetLimiter, requestStudentPasswordReset);
+router.post('/password-reset', passwordResetLimiter, resetStudentPassword);
 router.get('/me', studentAuthMiddleware, getStudent);
 
 export default router;
