@@ -144,6 +144,36 @@ export async function sendStudentPasswordResetOtp(name: string, email: string, c
   if (result.error) throw new Error(result.error.message);
 }
 
+export function isEmailConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY);
+}
+
+/** "Voting is open" email, the backup for students without push notifications. */
+export async function sendElectionOpenEmail(
+  name: string,
+  email: string,
+  election: { title: string; closesAtText: string; path: string },
+): Promise<void> {
+  if (!process.env.RESEND_API_KEY) throw new Error('Email delivery is not configured');
+  const client = getResendClient();
+  const link = `${appUrl()}${election.path}`;
+  const result = await client.emails.send({
+    from: getMailFrom(),
+    to: email,
+    subject: `Voting is open: ${election.title}`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#111827">
+      <h2>Voting is open</h2>
+      <p>Hello ${escapeEmailHtml(name)},</p>
+      <p><strong>${escapeEmailHtml(election.title)}</strong> is open on NEXIUM until <strong>${escapeEmailHtml(election.closesAtText)}</strong> (Lagos time). Voting takes about a minute, and your vote is secret.</p>
+      <p style="margin:28px 0;text-align:center">
+        <a href="${link}" style="background:#6b21a8;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:600;display:inline-block">Vote now</a>
+      </p>
+      <p style="color:#6b7280;font-size:13px">Tip: turn on notifications in NEXIUM (the bell at the top) to get the next update straight on your phone.</p>
+    </div>`,
+  });
+  if (result.error) throw new Error(result.error.message);
+}
+
 function escapeEmailHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
 }

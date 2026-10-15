@@ -19,10 +19,12 @@ import {
   type ElectionAction,
   type ElectionStatus,
 } from '../domain/electionRules';
+import { lagosTime, REMINDER_SPACING_MS, reminderNotice } from '../domain/electionNotices';
 import { readVoterList, type VoterRow } from '../domain/voterList';
 import { loadClassList } from '../infrastructure/classList';
 import { electionRepository, type Actor, type ElectionRepository, type ElectionWithSetup } from '../infrastructure/electionRepository';
 import { announceElection } from './electionBroadcast';
+import { electionNotifier, type ElectionNotifier } from './electionNotifier';
 
 export interface StaffUser {
   id: string;
@@ -68,6 +70,7 @@ export class ElectionAdminService {
     private readonly uploadPhoto: PhotoUploader = defaultUploader,
     private readonly announce: (electionId: string) => void = announceElection,
     private readonly classList: () => VoterRow[] = loadClassList,
+    private readonly notifier: Pick<ElectionNotifier, 'send' | 'history' | 'lastReminderAt'> = electionNotifier,
   ) {}
 
   private require(user: StaffUser, action: ElectionAction) {
@@ -122,13 +125,15 @@ export class ElectionAdminService {
     this.require(user, 'view');
     const election = await this.load(id);
     const status = await this.settle(election);
-    const [turnout, registered, ballots, approvals, committee] = await Promise.all([
+    const [turnout, registered, ballots, approvals, committee, notifications] = await Promise.all([
       this.repo.turnout(id),
       this.repo.registeredCount(id),
       this.repo.ballotCount(id),
       this.repo.approvals(id),
       this.repo.committeeMembers(),
+      this.notifier.history(id),
     ]);
+    const lastReminder = notifications.find((notice) => notice.kind === 'reminder');
     const closedAt = election.closedAt ?? (status === 'closed' ? election.closesAt : null);
     return {
       id: election.id,
@@ -161,7 +166,26 @@ export class ElectionAdminService {
       approvals: approvals.map((approval) => ({ userId: approval.userId, name: approval.user.name, at: approval.createdAt })),
       soloPublishAt: closedAt ? new Date(closedAt.getTime() + SOLO_PUBLISH_DELAY_MS) : null,
       committee: committee.map((member) => ({ id: member.id, name: member.name })),
+      notifications: notifications.map((notice) => ({ kind: notice.kind, at: notice.createdAt, sentBy: notice.sentByName, pushQueued: notice.pushQueued, emailsSent: notice.emailsSent })),
+      reminderAvailableAt: lastReminder ? new Date(lastReminder.createdAt.getTime() + REMINDER_SPACING_MS) : null,
     };
+  }
+
+  /** Committee: push "you haven't voted yet" to students who haven't voted (at most every 30 minutes). */
+  async remind(user: StaffUser, id: string) {
+    this.require(user, 'run');
+    const election = await this.load(id);
+    if (election.isTest) throw new AppError(409, "Test elections don't send notifications, so the whole class isn't pinged during a rehearsal.");
+    if (effectiveStatus(election) !== 'open') throw new AppError(409, 'Reminders can only be sent while voting is open.');
+    const now = new Date();
+    const last = await this.notifier.lastReminderAt(id);
+    if (last && now.getTime() - last.getTime() < REMINDER_SPACING_MS) {
+      throw new AppError(409, `A reminder went out at ${lagosTime(last)}. The next one can go at ${lagosTime(new Date(last.getTime() + REMINDER_SPACING_MS))}.`);
+    }
+    const result = await this.notifier.send(election, reminderNotice(now), user.name);
+    if (!result) throw new AppError(409, 'The other committee member has just sent a reminder.');
+    await this.repo.audit(id, this.actor(user), 'reminder-sent', { phones: result.pushQueued });
+    return this.detail(user, id);
   }
 
   // ---- Setup (developer) ---------------------------------------------------

@@ -5,7 +5,7 @@ import {
   addCandidate, addPosition, approvePublish, backToDraft, castBallot, checkReceipt, closeElection, createElection,
   deleteElection, extendElection, getAuditLog, getElection, getElectionResults, getMyElection, getPublishedResults,
   getRegistrations, getTurnoutTimeline, listCommittee, listElections, listMyElections, markReady, openElection,
-  pauseElection, removeCandidate, removePosition, resumeElection, suspendStudent, updateCandidate, updateElection,
+  pauseElection, remindNonVoters, removeCandidate, removePosition, resumeElection, suspendStudent, updateCandidate, updateElection,
   updatePosition, uploadVoters,
 } from '../controllers/electionController';
 import { authMiddleware } from '../middleware/authMiddleware';
@@ -117,6 +117,7 @@ electionAdminRoutes.post('/:id/pause', pauseElection);
 electionAdminRoutes.post('/:id/resume', resumeElection);
 electionAdminRoutes.post('/:id/extend', extendElection);
 electionAdminRoutes.post('/:id/close', closeElection);
+electionAdminRoutes.post('/:id/remind', remindNonVoters);
 electionAdminRoutes.post('/:id/publish', approvePublish);
 electionAdminRoutes.get('/:id/results', getElectionResults);
 electionAdminRoutes.get('/:id/audit', getAuditLog);

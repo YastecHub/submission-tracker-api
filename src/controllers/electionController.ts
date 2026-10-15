@@ -35,6 +35,7 @@ export const pauseElection = ok((req) => electionAdminService.pause(staff(req), 
 export const resumeElection = ok((req) => electionAdminService.resume(staff(req), param(req, 'id')));
 export const extendElection = ok((req) => electionAdminService.extend(staff(req), param(req, 'id'), req.body ?? {}));
 export const closeElection = ok((req) => electionAdminService.close(staff(req), param(req, 'id')));
+export const remindNonVoters = ok((req) => electionAdminService.remind(staff(req), param(req, 'id')));
 export const approvePublish = ok((req) => electionAdminService.approvePublish(staff(req), param(req, 'id')));
 export const getElectionResults = ok((req) => electionAdminService.results(staff(req), param(req, 'id')));
 export const getRegistrations = ok((req) => electionAdminService.registrations(staff(req), param(req, 'id')));

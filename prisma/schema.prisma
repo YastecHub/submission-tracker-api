@@ -369,9 +369,10 @@ model NotificationOutbox {
   id                  String                    @id @default(uuid())
   subscriptionId      String?
   subscription        StudentPushSubscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
-  announcementId      String
-  announcement        Announcement              @relation(fields: [announcementId], references: [id], onDelete: Cascade)
-  announcementVersion Int
+  /// Empty for notices that aren't Bulletin posts (e.g. election notices).
+  announcementId      String?
+  announcement        Announcement?             @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  announcementVersion Int?
   payload             Json
   status              NotificationOutboxStatus  @default(pending)
   attempts            Int                       @default(0)
@@ -571,8 +572,24 @@ model Election {
   ballots              ElectionBallot[]
   publishApprovals     ElectionPublishApproval[]
   auditLogs            ElectionAuditLog[]
+  notifications        ElectionNotification[]
 
   @@index([status])
+}
+
+/// A notice sent for an election (push, plus email for "voting is open"). The key makes it once-only.
+model ElectionNotification {
+  id         String   @id @default(uuid())
+  electionId String
+  key        String
+  kind       String
+  sentByName String?
+  pushQueued Int      @default(0)
+  emailsSent Int      @default(0)
+  createdAt  DateTime @default(now())
+  election   Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+
+  @@unique([electionId, key])
 }
 
 model ElectionPosition {

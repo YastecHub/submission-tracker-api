@@ -2,6 +2,7 @@ import logger from '../../../lib/logger';
 import { effectiveStatus } from '../domain/electionRules';
 import { electionRepository } from '../infrastructure/electionRepository';
 import { announceElection } from './electionBroadcast';
+import { electionNotifier } from './electionNotifier';
 
 const SYSTEM = { id: null, name: 'NEXIUM', role: 'system' };
 
@@ -38,6 +39,7 @@ export function startElectionScheduler(intervalMs = 5_000): () => void {
     if (running) return;
     running = true;
     runElectionSchedule()
+      .then(() => electionNotifier.runDue())
       .catch((error) => logger.warn('[elections] schedule tick failed', { error }))
       .finally(() => { running = false; });
   }, intervalMs);

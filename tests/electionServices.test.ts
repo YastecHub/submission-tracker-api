@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { ElectionAdminService } from '../src/modules/elections/application/electionAdminService';
 import { StudentElectionService } from '../src/modules/elections/application/studentElectionService';
 import { createFakeElectionRepo } from './helpers/fakeElectionRepo';
+import { createFakeNotificationStore } from './helpers/fakeNotificationStore';
+import { ElectionNotifier } from '../src/modules/elections/application/electionNotifier';
 import { loadClassList } from '../src/modules/elections/infrastructure/classList';
 import { readVoterList } from '../src/modules/elections/domain/voterList';
 
@@ -19,7 +21,13 @@ async function setup() {
   db.users.push({ id: officerA.id, name: officerA.name, email: 'a@x.test', role: 'electoral_committee', createdAt: new Date() });
   db.users.push({ id: officerB.id, name: officerB.name, email: 'b@x.test', role: 'electoral_committee', createdAt: new Date() });
   const announced: string[] = [];
-  const admin = new ElectionAdminService(repo, async () => ({ url: 'https://img.test/p.jpg', publicId: 'p' }), (id) => announced.push(id), () => []);
+  const notices = createFakeNotificationStore(db);
+  const emails: string[] = [];
+  const notifier = new ElectionNotifier(notices.store, {
+    pushEnabled: () => true, emailEnabled: () => true, deliverNow: () => {}, emailGapMs: 0, emailCap: 1,
+    sendEmail: async (_name, email) => { emails.push(email); },
+  });
+  const admin = new ElectionAdminService(repo, async () => ({ url: 'https://img.test/p.jpg', publicId: 'p' }), (id) => announced.push(id), () => [], notifier);
   const votes: string[] = [];
   const students = new StudentElectionService(repo, (studentId) => votes.push(studentId));
   let election = await admin.create(dev, { title: 'Class Executives 2026', opensAt: minutes(60), closesAt: minutes(240) });
@@ -37,7 +45,7 @@ async function setup() {
   db.students.push({ id: 's2', matricNumber: '251106002', fullName: 'Bayo Ade', email: 'bayo@x.test', createdAt: new Date(Date.now() - 86_400_000), suspendedAt: null, suspendedReason: null });
   db.students.push({ id: 's9', matricNumber: '251106099', fullName: 'Not On List', email: 'x@x.test', createdAt: new Date(), suspendedAt: null, suspendedReason: null });
   election = await admin.detail(dev, election.id);
-  return { repo, db, admin, students, election, announced, votes };
+  return { repo, db, admin, students, election, announced, votes, notices, notifier, emails };
 }
 
 function ballot(election: any, presIndex = 0, approve = true) {
@@ -196,7 +204,8 @@ test('after locking, the developer can only add voters (late corrections), never
 test('a new election starts with the whole class list as its voter list', async () => {
   const { repo } = createFakeElectionRepo();
   const classList = readVoterList('matricNumber,fullName,email\n251106001,"ADEGOKE, Adebusola Faith",\n,Jupeb One,jupeb1@x.test\n').rows;
-  const admin = new ElectionAdminService(repo, async () => ({ url: '', publicId: '' }), () => {}, () => classList);
+  const notifier = new ElectionNotifier(createFakeNotificationStore(createFakeElectionRepo().db).store, { pushEnabled: () => false, emailEnabled: () => false });
+  const admin = new ElectionAdminService(repo, async () => ({ url: '', publicId: '' }), () => {}, () => classList, notifier);
   const election = await admin.create(dev, { title: 'Class Executives 2026', opensAt: minutes(60), closesAt: minutes(240) });
   const roll = await repo.rollMatrics(election.id);
   assert.equal(roll.size, 2);
@@ -210,4 +219,51 @@ test('the seeded class list file is valid: 126 students, sheet naming', () => {
   assert.equal(new Set(rows.map((row) => row.matricNumber)).size, 126);
   assert.equal(rows.find((row) => row.matricNumber === '251106026')?.fullName, 'OYEBO, Yasir Oladimeji');
   assert.ok(rows.some((row) => row.matricNumber === '240706016'));
+});
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('"voting is open": every phone of students who can vote, plus an email (capped) to those without push; sent once', async () => {
+  const ctx = await setup();
+  ctx.notices.state.subscriptions.push({ id: 'phone-a', studentId: 's1' }, { id: 'laptop-a', studentId: 's1' });
+  await openNow(ctx);
+  await ctx.notifier.runDue();
+  await settle();
+  assert.deepEqual(ctx.notices.state.pushed.map((push) => push.subscriptionId).sort(), ['laptop-a', 'phone-a']);
+  assert.equal(ctx.notices.state.pushed[0].message.title, 'Voting is open');
+  assert.equal(ctx.notices.state.pushed[0].message.url, `/student/elections/${ctx.election.id}`);
+  assert.deepEqual(ctx.emails, ['bayo@x.test'], 'only the student without push gets the email');
+  await ctx.notifier.runDue();
+  assert.equal(ctx.notices.state.pushed.length, 2, 'never sent twice');
+  const detail = await ctx.admin.detail(officerA, ctx.election.id);
+  assert.deepEqual(detail.notifications.map((n) => [n.kind, n.pushQueued, n.emailsSent]), [['opened', 2, 1]]);
+});
+
+test('committee reminder: only students who have not voted, at most every 30 minutes, never for a test election', async () => {
+  const ctx = await setup();
+  ctx.notices.state.subscriptions.push({ id: 'phone-a', studentId: 's1' }, { id: 'phone-b', studentId: 's2' });
+  await assert.rejects(ctx.admin.remind(officerA, ctx.election.id), /only be sent while voting is open/);
+  await openNow(ctx);
+  await ctx.students.vote({ id: 's1', matricNumber: '251106001' }, ctx.election.id, ballot(ctx.election));
+  ctx.notices.state.pushed.length = 0;
+  await assert.rejects(ctx.admin.remind(dev, ctx.election.id), /electoral committee/);
+  const detail = await ctx.admin.remind(officerA, ctx.election.id);
+  assert.deepEqual(ctx.notices.state.pushed.map((push) => push.subscriptionId), ['phone-b']);
+  assert.equal(ctx.notices.state.pushed[0].message.title, "You haven't voted yet");
+  assert.equal(detail.notifications[0].sentBy, officerA.name);
+  assert.ok(detail.reminderAvailableAt && new Date(detail.reminderAvailableAt).getTime() > Date.now() + 29 * 60_000);
+  await assert.rejects(ctx.admin.remind(officerB, ctx.election.id), /next one can go at/);
+  assert.ok(ctx.db.audit.some((entry: any) => entry.action === 'reminder-sent'));
+  ctx.db.elections[0].isTest = true;
+  await assert.rejects(ctx.admin.remind(officerA, ctx.election.id), /Test elections/);
+});
+
+test('results notice goes to everyone on the list with an account, including students who voted', async () => {
+  const ctx = await setup();
+  ctx.notices.state.subscriptions.push({ id: 'phone-a', studentId: 's1' }, { id: 'phone-b', studentId: 's2' });
+  const election = ctx.db.elections[0];
+  Object.assign(election, { status: 'published', publishedAt: new Date() });
+  await ctx.notifier.runDue();
+  assert.deepEqual(ctx.notices.state.pushed.map((push) => [push.subscriptionId, push.message.title]), [['phone-a', 'Results are out'], ['phone-b', 'Results are out']]);
+  assert.equal(ctx.emails.length, 0, 'only "voting is open" is emailed');
 });
