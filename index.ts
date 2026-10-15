@@ -23,6 +23,7 @@ import { startNotificationDeliveryWorker } from './src/modules/announcements/app
 import { syncCourseCatalog } from './src/modules/gpa/infrastructure/catalogSync';
 import { electionAdminRoutes, studentElectionRoutes } from './src/routes/elections';
 import { startElectionScheduler } from './src/modules/elections/application/electionScheduler';
+import { syncClassList } from './src/modules/elections/infrastructure/classList';
 import { startSocketServer } from './src/realtime/socketServer';
 import jwt from 'jsonwebtoken';
 import logger, { requestLogger } from './src/lib/logger';
@@ -279,6 +280,10 @@ server.on('listening', async () => {
         logger.info(`Course catalog: ${result.courses} courses in file, ${changed ? `${result.created} added, ${result.updated} updated` : 'database already up to date'}`);
       })
       .catch((error: unknown) => logger.warn('Course catalog sync skipped', { error }));
+    // The class list (who can vote) lives in prisma/data/class-list.csv; seed the student list and open elections from it.
+    syncClassList(prisma)
+      .then((result) => logger.info(`Class list: ${result.students} students in file, ${result.rosterUpdated} student-list entries added or updated, ${result.accountsRenamed} account names updated, ${result.votersAdded} added to open voter lists`))
+      .catch((error: unknown) => logger.error('Class list sync failed', { error }));
   } catch (err: unknown) {
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[31m● Connection failed\x1b[0m');
     console.error('  ─────────────────────────────────────────');

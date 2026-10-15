@@ -19,7 +19,8 @@ import {
   type ElectionAction,
   type ElectionStatus,
 } from '../domain/electionRules';
-import { readVoterList } from '../domain/voterList';
+import { readVoterList, type VoterRow } from '../domain/voterList';
+import { loadClassList } from '../infrastructure/classList';
 import { electionRepository, type Actor, type ElectionRepository, type ElectionWithSetup } from '../infrastructure/electionRepository';
 import { announceElection } from './electionBroadcast';
 
@@ -66,6 +67,7 @@ export class ElectionAdminService {
     private readonly repo: ElectionRepository = electionRepository,
     private readonly uploadPhoto: PhotoUploader = defaultUploader,
     private readonly announce: (electionId: string) => void = announceElection,
+    private readonly classList: () => VoterRow[] = loadClassList,
   ) {}
 
   private require(user: StaffUser, action: ElectionAction) {
@@ -180,6 +182,12 @@ export class ElectionAdminService {
     const schedule = this.schedule(body);
     const election = await this.repo.create({ title, description, ...schedule, isTest: flag(body.isTest), createdById: user.id });
     await this.repo.audit(election.id, this.actor(user), 'created', { title, isTest: election.isTest });
+    // Every election's voter list starts as the whole class list (prisma/data/class-list.csv).
+    const voters = this.classList();
+    if (voters.length) {
+      await this.repo.addVoters(election.id, voters);
+      await this.repo.audit(election.id, this.actor(user), 'voters-from-class-list', { total: voters.length });
+    }
     return this.detail(user, election.id);
   }
 
@@ -369,7 +377,7 @@ export class ElectionAdminService {
     const empty = election.positions.filter((position) => position.candidates.length === 0);
     if (empty.length) throw badRequest(`Add a candidate for ${empty.map((position) => position.title).join(', ')}.`);
     const { eligible } = await this.repo.turnout(id);
-    if (!eligible) throw badRequest('Upload the voter list first.');
+    if (!eligible) throw badRequest('The voter list is empty. Add the class to prisma/data/class-list.csv and redeploy.');
     if (election.closesAt.getTime() <= Date.now() + 5 * 60_000) throw badRequest('The closing time has passed or is too close. Change the times first.');
     if (!(await this.repo.updateIf(id, ['draft'], { status: 'ready' }))) throw new AppError(409, 'The election changed. Refresh and try again.');
     await this.repo.audit(id, this.actor(user), 'locked-ready');

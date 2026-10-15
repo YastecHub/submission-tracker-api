@@ -17,6 +17,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:catalog": "tsx prisma/seed-course-catalog.ts",
     "db:sync:catalog": "node dist/prisma/seed-course-catalog.js",
+    "db:seed:class-list": "tsx prisma/seed-class-list.ts",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {

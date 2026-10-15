@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { ElectionAdminService } from '../src/modules/elections/application/electionAdminService';
 import { StudentElectionService } from '../src/modules/elections/application/studentElectionService';
 import { createFakeElectionRepo } from './helpers/fakeElectionRepo';
+import { loadClassList } from '../src/modules/elections/infrastructure/classList';
+import { readVoterList } from '../src/modules/elections/domain/voterList';
 
 const dev = { id: 'dev-1', name: 'Yasir', role: 'dev' };
 const officerA = { id: 'ec-1', name: 'Roqeeb', role: 'electoral_committee' };
@@ -17,7 +19,7 @@ async function setup() {
   db.users.push({ id: officerA.id, name: officerA.name, email: 'a@x.test', role: 'electoral_committee', createdAt: new Date() });
   db.users.push({ id: officerB.id, name: officerB.name, email: 'b@x.test', role: 'electoral_committee', createdAt: new Date() });
   const announced: string[] = [];
-  const admin = new ElectionAdminService(repo, async () => ({ url: 'https://img.test/p.jpg', publicId: 'p' }), (id) => announced.push(id));
+  const admin = new ElectionAdminService(repo, async () => ({ url: 'https://img.test/p.jpg', publicId: 'p' }), (id) => announced.push(id), () => []);
   const votes: string[] = [];
   const students = new StudentElectionService(repo, (studentId) => votes.push(studentId));
   let election = await admin.create(dev, { title: 'Class Executives 2026', opensAt: minutes(60), closesAt: minutes(240) });
@@ -189,4 +191,23 @@ test('after locking, the developer can only add voters (late corrections), never
   assert.equal(result.mode, 'add');
   assert.equal(result.removed, 0);
   assert.equal(ctx.db.roll.length, 4);
+});
+
+test('a new election starts with the whole class list as its voter list', async () => {
+  const { repo } = createFakeElectionRepo();
+  const classList = readVoterList('matricNumber,fullName,email\n251106001,"ADEGOKE, Adebusola Faith",\n,Jupeb One,jupeb1@x.test\n').rows;
+  const admin = new ElectionAdminService(repo, async () => ({ url: '', publicId: '' }), () => {}, () => classList);
+  const election = await admin.create(dev, { title: 'Class Executives 2026', opensAt: minutes(60), closesAt: minutes(240) });
+  const roll = await repo.rollMatrics(election.id);
+  assert.equal(roll.size, 2);
+  assert.ok(roll.has('251106001'));
+  assert.equal(election.counts.voters, 2);
+});
+
+test('the seeded class list file is valid: 126 students, sheet naming', () => {
+  const rows = loadClassList();
+  assert.equal(rows.length, 126);
+  assert.equal(new Set(rows.map((row) => row.matricNumber)).size, 126);
+  assert.equal(rows.find((row) => row.matricNumber === '251106026')?.fullName, 'OYEBO, Yasir Oladimeji');
+  assert.ok(rows.some((row) => row.matricNumber === '240706016'));
 });
