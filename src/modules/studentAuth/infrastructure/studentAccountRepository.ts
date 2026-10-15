@@ -15,7 +15,12 @@ export class StudentAccountRepository {
   }
 
   findRosterRecord(matricNumber: string) {
-    return prisma.studentRoster.findUnique({ where: { matricNumber }, select: { fullName: true } });
+    return prisma.studentRoster.findUnique({ where: { matricNumber }, select: { matricNumber: true, fullName: true, email: true } });
+  }
+
+  /** A student list entry seeded with this email (e.g. JUPEB students without a matric number). */
+  findRosterByEmail(email: string) {
+    return prisma.studentRoster.findUnique({ where: { email }, select: { matricNumber: true, fullName: true, email: true } });
   }
 
   findRegistrationOtp(matricNumber: string) {
@@ -68,7 +73,7 @@ export class StudentAccountRepository {
   }
 
   findSessionState(id: string) {
-    return prisma.studentAccount.findUnique({ where: { id }, select: { passwordChangedAt: true } });
+    return prisma.studentAccount.findUnique({ where: { id }, select: { passwordChangedAt: true, suspendedAt: true } });
   }
 
   createVerifiedAccount(data: { matricNumber: string; email: string; fullName: string; passwordHash: string }) {

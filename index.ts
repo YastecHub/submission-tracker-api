@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import compression from 'compression';
-import { rateLimit } from 'express-rate-limit';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './src/swagger';
 
@@ -21,6 +21,10 @@ import announcementRoutes from './src/routes/announcements';
 import gpaRoutes from './src/routes/gpa';
 import { startNotificationDeliveryWorker } from './src/modules/announcements/application/notificationDeliveryWorker';
 import { syncCourseCatalog } from './src/modules/gpa/infrastructure/catalogSync';
+import { electionAdminRoutes, studentElectionRoutes } from './src/routes/elections';
+import { startElectionScheduler } from './src/modules/elections/application/electionScheduler';
+import { startSocketServer } from './src/realtime/socketServer';
+import jwt from 'jsonwebtoken';
 import logger, { requestLogger } from './src/lib/logger';
 import { publicApiUrl } from './src/lib/publicUrl';
 
@@ -95,12 +99,32 @@ app.use(compression());
 
 // GPA CSV imports can be larger than the default 100 KB JSON limit.
 app.use('/api/gpa/import', express.json({ limit: '1mb' }));
+// Voter lists are uploaded as CSV text.
+app.use('/api/election-admin', express.json({ limit: '1mb' }));
 app.use(express.json());
 
-// Rate limiting: 200 req/min per IP for general API
+/**
+ * General limit: 200 requests a minute. Signed-in requests are counted per account, not
+ * per IP, because a whole class often shares one campus or mobile-network IP (on
+ * election day especially). Anonymous requests are still counted per IP.
+ */
+function rateLimitKey(req: Request): string {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET!) as { id?: string; scope?: string };
+      if (payload.id) return `${payload.scope === 'student' ? 'student' : 'staff'}:${payload.id}`;
+    } catch {
+      // Fall through to the IP for invalid tokens.
+    }
+  }
+  return `ip:${ipKeyGenerator(req.ip ?? '')}`;
+}
+
 const apiLimiter = rateLimit({
   windowMs: 60_000,
   max: 200,
+  keyGenerator: rateLimitKey,
   skip: (req) => req.method === 'OPTIONS',
   standardHeaders: true,
   legacyHeaders: false,
@@ -144,6 +168,8 @@ app.use('/api/payment-events', paymentEventRoutes);
 app.use('/api/payment-receipts', paymentReceiptRoutes);
 app.use('/api/bulletin', announcementRoutes);
 app.use('/api/gpa', gpaRoutes);
+app.use('/api/elections', studentElectionRoutes);
+app.use('/api/election-admin', electionAdminRoutes);
 app.use('/api', transactionRoutes);
 
 app.get('/', (_req: Request, res: Response) => {
@@ -199,7 +225,10 @@ const HOST = process.env.HOST ?? '0.0.0.0';
 
 const server = app.listen(PORT, HOST);
 let stopNotificationWorker = () => { };
-server.on('close', () => stopNotificationWorker());
+let stopElectionScheduler = () => { };
+// Live updates (elections) share the API's port.
+const sockets = startSocketServer(server, isAllowedOrigin);
+server.on('close', () => { stopNotificationWorker(); stopElectionScheduler(); });
 
 server.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EADDRINUSE') {
@@ -213,6 +242,8 @@ server.on('error', (error: NodeJS.ErrnoException) => {
 const shutdown = (signal: string) => {
   logger.info(`Received ${signal}. Shutting down API server gracefully...`);
   stopNotificationWorker();
+  stopElectionScheduler();
+  sockets.disconnectSockets(true);
   server.close(() => {
     logger.info('API server closed cleanly.');
     process.exit(0);
@@ -240,6 +271,7 @@ server.on('listening', async () => {
     console.log('  \x1b[1mDB:      \x1b[0m\x1b[32m● Connected\x1b[0m');
     logger.info(`NEXIUM API server listening on ${base} [DB Connected]`);
     stopNotificationWorker = startNotificationDeliveryWorker();
+    stopElectionScheduler = startElectionScheduler();
     // The GPA course list lives in prisma/data/course-catalog.csv; keep the database in step with it.
     syncCourseCatalog(prisma)
       .then((result) => {

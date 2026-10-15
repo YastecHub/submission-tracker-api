@@ -1,5 +1,5 @@
-import { Router } from 'express';
-import { rateLimit } from 'express-rate-limit';
+import { Router, type Request } from 'express';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import {
   getStudent,
   loginStudent,
@@ -11,11 +11,33 @@ import {
 import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
 
 const router = Router();
-const credentialLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
-  message: { error: 'Too many attempts, please try again later.' } });
-// Separate budget so a few reset attempts never lock a shared campus IP out of signing in.
-const passwordResetLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
-  message: { error: 'Too many password reset attempts, please try again later.' } });
+
+/**
+ * Limits are per IP *and* account (matric number or email), because a whole class often
+ * shares one campus or mobile-network IP: one student's typos must never lock out the
+ * rest. A looser per-IP ceiling still stops one device from hammering many accounts.
+ */
+function accountKey(req: Request): string {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const id = [body.identifier, body.matricNumber, body.email].find((value) => typeof value === 'string' && value.trim()) as string | undefined;
+  return `${ipKeyGenerator(req.ip ?? '')}:${(id ?? '').trim().toLowerCase().replace(/\s+/g, '')}`;
+}
+const limit = (prefix: string, max: number, message: string, perAccount: boolean) => rateLimit({
+  windowMs: 15 * 60_000,
+  max,
+  keyGenerator: (req) => `${prefix}:${perAccount ? accountKey(req) : ipKeyGenerator(req.ip ?? '')}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: message },
+});
+const credentialLimiter = [
+  limit('cred', 10, 'Too many attempts for this account. Wait 15 minutes and try again.', true),
+  limit('cred-ip', 300, 'Too many attempts from this network, please try again later.', false),
+];
+const passwordResetLimiter = [
+  limit('reset', 10, 'Too many password reset attempts, please try again later.', true),
+  limit('reset-ip', 200, 'Too many password reset attempts from this network, please try again later.', false),
+];
 
 /**
  * @openapi

@@ -13,6 +13,8 @@ enum UserRole {
   acr
   fin_sec
   dev
+  /// Runs elections only (open, pause, close, publish). No class rep access.
+  electoral_committee
 }
 
 model User {
@@ -33,6 +35,8 @@ model User {
   announcementRevisions  AnnouncementRevision[] @relation("AnnouncementRevisionCreatedBy")
   announcementAiRuns     AnnouncementAiRun[]    @relation("AnnouncementAiRunRequestedBy")
   announcementMedia      AnnouncementMedia[]    @relation("AnnouncementMediaCreatedBy")
+  electionsCreated       Election[]             @relation("ElectionCreatedBy")
+  electionApprovals      ElectionPublishApproval[]
 }
 
 model StudentAccount {
@@ -49,12 +53,18 @@ model StudentAccount {
   pushSubscriptions StudentPushSubscription[]
   gpaSemesters      GpaSemester[]
   passwordReset     StudentPasswordResetOtp?
+  /// Set by the electoral committee; a suspended account cannot sign in or vote.
+  suspendedAt       DateTime?
+  suspendedReason   String?
+  electionVotes     ElectionVoteRecord[]
 }
 
 model StudentRoster {
   id           String   @id @default(uuid())
   matricNumber String   @unique
   fullName     String
+  /// Seeded email (e.g. JUPEB students): registration codes for this matric go only here.
+  email        String?  @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -519,4 +529,167 @@ model GpaCourse {
 
   @@unique([semesterId, code])
   @@index([catalogCourseId])
+}
+
+// ---------------------------------------------------------------------------
+// Elections. Secret ballot: ElectionVoteRecord says WHO voted, ElectionBallot says
+// WHAT was voted, and nothing links the two.
+// ---------------------------------------------------------------------------
+
+enum ElectionStatus {
+  draft
+  ready
+  open
+  paused
+  closed
+  published
+}
+
+model Election {
+  id                   String                    @id @default(uuid())
+  title                String
+  description          String?
+  status               ElectionStatus            @default(draft)
+  /// Rehearsal elections can be deleted even after votes.
+  isTest               Boolean                   @default(false)
+  opensAt              DateTime
+  closesAt             DateTime
+  /// Accounts created after this cannot vote in this election.
+  registrationDeadline DateTime?
+  openedAt             DateTime?
+  closedAt             DateTime?
+  publishedAt          DateTime?
+  createdById          String
+  version              Int                       @default(1)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  createdBy            User                      @relation("ElectionCreatedBy", fields: [createdById], references: [id])
+  positions            ElectionPosition[]
+  candidates           ElectionCandidate[]
+  voterRoll            ElectionVoterRoll[]
+  voteRecords          ElectionVoteRecord[]
+  ballots              ElectionBallot[]
+  publishApprovals     ElectionPublishApproval[]
+  auditLogs            ElectionAuditLog[]
+
+  @@index([status])
+}
+
+model ElectionPosition {
+  id         String                 @id @default(uuid())
+  electionId String
+  title      String
+  sortOrder  Int                    @default(0)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  election   Election               @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  candidates ElectionCandidate[]
+  choices    ElectionBallotChoice[]
+
+  @@index([electionId, sortOrder])
+}
+
+model ElectionCandidate {
+  id            String                 @id @default(uuid())
+  electionId    String
+  positionId    String
+  matricNumber  String?
+  displayName   String
+  nickname      String?
+  photoUrl      String?
+  photoPublicId String?
+  manifesto     String?
+  sortOrder     Int                    @default(0)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  election      Election               @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  position      ElectionPosition       @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  choices       ElectionBallotChoice[]
+
+  @@index([positionId, sortOrder])
+  @@index([electionId])
+}
+
+/// Who may vote in an election (uploaded voter list).
+model ElectionVoterRoll {
+  electionId   String
+  matricNumber String
+  fullName     String
+  createdAt    DateTime @default(now())
+  election     Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+
+  @@id([electionId, matricNumber])
+}
+
+/// Who has voted. No choices here.
+model ElectionVoteRecord {
+  id           String         @id @default(uuid())
+  electionId   String
+  studentId    String
+  matricNumber String
+  /// Client-generated id of the submission, so a retried request is recognised.
+  requestId    String
+  votedAt      DateTime       @default(now())
+  election     Election       @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  student      StudentAccount @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([electionId, matricNumber])
+  @@unique([electionId, studentId])
+  @@index([electionId, votedAt])
+  @@index([studentId])
+}
+
+/// What was voted. No student here; time kept only to the hour.
+model ElectionBallot {
+  id          String                 @id @default(uuid())
+  electionId  String
+  receiptHash String
+  castHour    DateTime
+  election    Election               @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  choices     ElectionBallotChoice[]
+
+  @@unique([electionId, receiptHash])
+}
+
+model ElectionBallotChoice {
+  id          String            @id @default(uuid())
+  ballotId    String
+  positionId  String
+  candidateId String
+  /// Yes/No vote for an unopposed candidate; null in contested positions.
+  approve     Boolean?
+  ballot      ElectionBallot    @relation(fields: [ballotId], references: [id], onDelete: Cascade)
+  // Cascade only matters when a whole (test) election is deleted; candidates and
+  // positions can't be removed once voting is possible.
+  position    ElectionPosition  @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  candidate   ElectionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([ballotId, positionId])
+  @@index([positionId, candidateId])
+  @@index([candidateId])
+}
+
+model ElectionPublishApproval {
+  electionId String
+  userId     String
+  createdAt  DateTime @default(now())
+  election   Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([electionId, userId])
+  @@index([userId])
+}
+
+model ElectionAuditLog {
+  id          String   @id @default(uuid())
+  electionId  String
+  actorUserId String?
+  actorName   String
+  actorRole   String
+  action      String
+  detail      Json?
+  createdAt   DateTime @default(now())
+  election    Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+
+  @@index([electionId, createdAt])
 }

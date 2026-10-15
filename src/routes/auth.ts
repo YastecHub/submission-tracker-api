@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { login, me, savePushSubscription, updateProfile, changePassword, createUser } from '../controllers/authController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
-import { CLASS_ROLES } from '../modules/auth/domain/classRepAccess';
+import { CLASS_ROLES, STAFF_ROLES } from '../modules/auth/domain/classRepAccess';
 
 const router = Router();
 const requireClassRep = requireRole(...CLASS_ROLES);
+// The electoral committee signs in here too, but only reaches its own account and elections.
+const requireStaff = requireRole(...STAFF_ROLES);
 const requireDev = requireRole('dev');
 
 /**
@@ -94,9 +96,9 @@ router.post('/login', login);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/me', authMiddleware, requireClassRep, me);
-router.patch('/profile', authMiddleware, requireClassRep, updateProfile);
-router.patch('/password', authMiddleware, requireClassRep, changePassword);
+router.get('/me', authMiddleware, requireStaff, me);
+router.patch('/profile', authMiddleware, requireStaff, updateProfile);
+router.patch('/password', authMiddleware, requireStaff, changePassword);
 router.post('/push-subscription', authMiddleware, requireClassRep, savePushSubscription);
 router.post('/users', authMiddleware, requireDev, createUser);
 

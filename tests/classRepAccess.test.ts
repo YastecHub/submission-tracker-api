@@ -15,3 +15,11 @@ test('only developers can create class rep accounts', () => {
   assert.equal(canCreateClassRepAccount('fin_sec'), false);
   assert.equal(canCreateClassRepAccount('dev'), true);
 });
+
+test('the electoral committee can sign in and be created, but is not a class rep', async () => {
+  const { CLASS_ROLES, CREATABLE_ROLES, STAFF_ROLES, isClassRep } = await import('../src/modules/auth/domain/classRepAccess');
+  assert.ok(STAFF_ROLES.includes('electoral_committee'));
+  assert.ok(CREATABLE_ROLES.includes('electoral_committee'));
+  assert.ok(!CLASS_ROLES.includes('electoral_committee'));
+  assert.equal(isClassRep('electoral_committee'), false);
+});

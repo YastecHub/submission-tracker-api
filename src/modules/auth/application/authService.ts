@@ -5,7 +5,7 @@ import { badRequest, forbidden, notFound, AppError } from '../../../shared/error
 import logger from '../../../lib/logger';
 import { sendWelcomeEmail } from '../../../utils/mailer';
 import { userRepository, UserRepository } from '../infrastructure/userRepository';
-import { canCreateClassRepAccount } from '../domain/classRepAccess';
+import { canCreateClassRepAccount, CREATABLE_ROLES } from '../domain/classRepAccess';
 
 function safeUser(user: { id: string; email: string; name: string; role: UserRole }) {
   return { id: user.id, email: user.email, name: user.name, role: user.role };
@@ -85,7 +85,7 @@ export class AuthService {
       throw badRequest('name, email, password, and role are required');
     }
 
-    const validRoles: UserRole[] = ['cr', 'acr', 'fin_sec', 'dev'];
+    const validRoles: UserRole[] = CREATABLE_ROLES;
     if (!validRoles.includes(input.role as UserRole)) throw badRequest(`role must be one of: ${validRoles.join(', ')}`);
     if (input.password.length < 8) throw badRequest('Password must be at least 8 characters');
 
@@ -104,7 +104,8 @@ export class AuthService {
   private async handleFirstLogin(user: { id: string; name: string; email: string; role: UserRole; hasLoggedInBefore: boolean }) {
     if (user.hasLoggedInBefore) return;
     await this.users.markHasLoggedInBefore(user.id);
-    if (user.role !== 'dev') {
+    // The class rep guide doesn't apply to the developer or the electoral committee.
+    if (user.role !== 'dev' && user.role !== 'electoral_committee') {
       await sendWelcomeEmail(user.name, user.email, user.role);
     }
   }

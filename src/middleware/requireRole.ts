@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 
-type Role = 'cr' | 'acr' | 'fin_sec' | 'dev';
+type Role = 'cr' | 'acr' | 'fin_sec' | 'dev' | 'electoral_committee';
 
 export function requireRole(...allowed: Role[]) {
   return (req: Request, res: Response, next: NextFunction): void => {

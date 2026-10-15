@@ -6,6 +6,8 @@ const SESSION_CACHE_MS = 60_000;
 interface SessionState {
   exists: boolean;
   passwordChangedAt: number | null;
+  /** Suspended by the electoral committee: every session ends. */
+  suspended?: boolean;
 }
 
 const cacheKey = (studentId: string) => `student-session:${studentId}`;
@@ -16,7 +18,7 @@ const cacheKey = (studentId: string) => `student-session:${studentId}`;
  * longer valid. The lookup is cached per student for a minute.
  */
 export function isSessionCurrent(state: SessionState, issuedAtSeconds: number | undefined): boolean {
-  if (!state.exists) return false;
+  if (!state.exists || state.suspended) return false;
   if (state.passwordChangedAt === null) return true;
   return (issuedAtSeconds ?? 0) >= Math.floor(state.passwordChangedAt / 1000);
 }
@@ -25,7 +27,7 @@ export async function studentSessionIsCurrent(studentId: string, issuedAtSeconds
   let state = cacheGet<SessionState>(cacheKey(studentId));
   if (!state) {
     const row = await studentAccountRepository.findSessionState(studentId);
-    state = { exists: !!row, passwordChangedAt: row?.passwordChangedAt?.getTime() ?? null };
+    state = { exists: !!row, passwordChangedAt: row?.passwordChangedAt?.getTime() ?? null, suspended: !!row?.suspendedAt };
     cacheSet(cacheKey(studentId), state, SESSION_CACHE_MS);
   }
   return isSessionCurrent(state, issuedAtSeconds);

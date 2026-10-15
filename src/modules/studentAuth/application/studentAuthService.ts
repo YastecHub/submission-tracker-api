@@ -7,6 +7,7 @@ import logger from '../../../lib/logger';
 import { sendStudentPasswordResetOtp, sendStudentRegistrationOtp } from '../../../utils/mailer';
 import { studentAccountRepository, StudentAccountRepository } from '../infrastructure/studentAccountRepository';
 import { forgetStudentSession } from './studentSessions';
+import { maskEmail } from '../../elections/domain/electionRules';
 
 const OTP_LIFETIME_MS = 10 * 60_000;
 const OTP_RESEND_COOLDOWN_MS = 60_000;
@@ -66,16 +67,36 @@ export class StudentAuthService {
     private readonly mailer: StudentAuthMailer = defaultMailer,
   ) {}
 
-  async requestRegistrationOtp(input: { matricNumber?: string; email?: string }) {
-    const matricNumber = normalizeMatric(input.matricNumber);
+  /**
+   * Who is registering. With a matric number: it must be on the student list, and if the
+   * list has a seeded email for it, the code goes only to that email. Without one (e.g.
+   * JUPEB students): the email itself must be a seeded email on the student list.
+   */
+  private async resolveRegistrant(input: { matricNumber?: string; email?: string }) {
     const email = normalizeEmail(input.email);
-    if (!matricNumber || matricNumber.length > 50) throw badRequest('Enter a valid matric number');
     if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 254) throw badRequest('Enter a valid email address');
-    if (await this.students.findByMatric(matricNumber)) throw new AppError(409, 'A student account already exists for this matric number');
-    if (await this.students.findByEmail(email)) throw new AppError(409, 'This email is already linked to a student account');
+    let matricNumber = normalizeMatric(input.matricNumber);
+    if (matricNumber.length > 50) throw badRequest('Enter a valid matric number');
+    let record: { matricNumber: string; fullName: string; email: string | null } | null;
+    if (!matricNumber) {
+      record = await this.students.findRosterByEmail(email);
+      if (!record) throw notFound('This email is not on the class list. Register with your matric number, or ask the electoral committee to add your email.');
+      matricNumber = record.matricNumber;
+    } else {
+      record = await this.students.findRosterRecord(matricNumber);
+      if (!record) throw notFound('Matric number was not found in class records');
+      if (record.email && record.email !== email) {
+        throw badRequest(`Use the email registered for this matric number (${maskEmail(record.email)}).`);
+      }
+    }
+    return { matricNumber, email, fullName: record.fullName };
+  }
 
-    const record = await this.students.findRosterRecord(matricNumber);
-    if (!record) throw notFound('Matric number was not found in class records');
+  async requestRegistrationOtp(input: { matricNumber?: string; email?: string }) {
+    const { matricNumber, email, fullName } = await this.resolveRegistrant(input);
+    if (await this.students.findByMatric(matricNumber)) throw new AppError(409, 'You already have an account. Sign in, or use "Forgot password?".');
+    if (await this.students.findByEmail(email)) throw new AppError(409, 'This email is already linked to a student account');
+    const record = { fullName };
 
     const existing = await this.students.findRegistrationOtp(matricNumber);
     if (existing && Date.now() - existing.lastSentAt.getTime() < OTP_RESEND_COOLDOWN_MS) {
@@ -100,11 +121,10 @@ export class StudentAuthService {
   }
 
   async completeRegistration(input: { matricNumber?: string; email?: string; code?: string; password?: string }) {
-    const matricNumber = normalizeMatric(input.matricNumber);
-    const email = normalizeEmail(input.email);
     const code = input.code?.trim() ?? '';
     validatePassword(input.password);
-    if (!matricNumber || !email || !/^\d{6}$/.test(code)) throw badRequest('Matric number, email, and a 6-digit code are required');
+    if (!/^\d{6}$/.test(code)) throw badRequest('Enter the 6-digit code from your email');
+    const { matricNumber, email } = await this.resolveRegistrant(input);
 
     const challenge = await this.students.findRegistrationOtp(matricNumber);
     if (!challenge || challenge.email !== email) throw badRequest('The verification code is invalid or expired');
@@ -135,11 +155,13 @@ export class StudentAuthService {
     }
   }
 
-  async login(input: { matricNumber?: string; password?: string }) {
-    const matricNumber = normalizeMatric(input.matricNumber);
-    if (!matricNumber || !input.password) throw badRequest('Matric number and password are required');
-    const student = await this.students.findByMatric(matricNumber);
+  /** Sign in with the matric number or the account email. */
+  async login(input: { matricNumber?: string; identifier?: string; password?: string }) {
+    const identifier = (input.identifier ?? input.matricNumber ?? '').trim();
+    if (!identifier || !input.password) throw badRequest('Matric number (or email) and password are required');
+    const student = await this.findByIdentifier(identifier);
     if (!student || !(await bcrypt.compare(input.password, student.passwordHash))) throw new AppError(401, 'Invalid matric number or password');
+    if (student.suspendedAt) throw new AppError(403, 'This account is suspended. Contact the electoral committee.');
     return { token: issueToken(student), student: safeStudent(student) };
   }
 
@@ -197,6 +219,7 @@ export class StudentAuthService {
       throw badRequest(INVALID_RESET_CODE);
     }
 
+    if (student.suspendedAt) throw new AppError(403, 'This account is suspended. Contact the electoral committee.');
     const account = await this.students.resetPassword(student.id, await bcrypt.hash(input.password, 10), new Date());
     // Sessions on other devices end on their next request.
     forgetStudentSession(student.id);

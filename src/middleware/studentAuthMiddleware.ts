@@ -18,7 +18,7 @@ export async function studentAuthMiddleware(req: Request, res: Response, next: N
   }
   try {
     if (!(await studentSessionIsCurrent(payload.id, payload.iat))) {
-      res.status(401).json({ error: 'Your password was changed. Please sign in again.' });
+      res.status(401).json({ error: 'Your session has ended. Please sign in again.' });
       return;
     }
   } catch (error) {
