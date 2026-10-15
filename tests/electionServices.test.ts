@@ -213,10 +213,12 @@ test('a new election starts with the whole class list as its voter list', async 
   assert.equal(election.counts.voters, 2);
 });
 
-test('the seeded class list file is valid: 126 students, sheet naming', () => {
+test('the seeded class list file is valid: 126 students with matric numbers plus the JUPEB students by email', () => {
   const rows = loadClassList();
-  assert.equal(rows.length, 126);
-  assert.equal(new Set(rows.map((row) => row.matricNumber)).size, 126);
+  assert.equal(rows.filter((row) => !row.emailOnly).length, 126);
+  assert.equal(rows.filter((row) => row.emailOnly).length, 12);
+  assert.ok(rows.filter((row) => row.emailOnly).every((row) => row.email && row.matricNumber.startsWith('JUPEB-')));
+  assert.equal(new Set(rows.map((row) => row.matricNumber)).size, rows.length);
   assert.equal(rows.find((row) => row.matricNumber === '251106026')?.fullName, 'OYEBO, Yasir Oladimeji');
   assert.ok(rows.some((row) => row.matricNumber === '240706016'));
 });
