@@ -7,6 +7,7 @@ import {
   createAnnouncement,
   deleteAnnouncementMedia,
   deleteStudentPushSubscription,
+  sendStudentTestPush,
   getAnnouncementAdmin,
   getAnnouncementOutstandingStudents,
   getAnnouncementUnreadCount,
@@ -41,6 +42,15 @@ const assistantLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'You have used the announcement assistant several times. Review the current suggestions before trying again.' },
 });
+const testPushLimiter = rateLimit({
+  windowMs: 10 * 60_000,
+  max: 5,
+  keyGenerator: (req) => req.student!.id,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'You have sent several test notifications. Please wait a few minutes.' },
+});
+
 const mediaUploadLimiter = rateLimit({
   windowMs: 60 * 60_000,
   max: 30,
@@ -127,6 +137,7 @@ router.get('/push/config', studentAuthMiddleware, getStudentPushConfig);
 router.post('/push/subscriptions/status', studentAuthMiddleware, getStudentPushSubscriptionStatus);
 router.post('/push/subscriptions', studentAuthMiddleware, saveStudentPushSubscription);
 router.delete('/push/subscriptions', studentAuthMiddleware, deleteStudentPushSubscription);
+router.post('/push/test', studentAuthMiddleware, testPushLimiter, sendStudentTestPush);
 
 /**
  * @openapi

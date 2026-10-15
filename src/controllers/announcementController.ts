@@ -71,6 +71,10 @@ export const saveStudentPushSubscription = created((req) =>
   studentPushSubscriptionService.save(req.student!.id, req.body, req.get('user-agent'))
 );
 
+export const sendStudentTestPush = ok((req) =>
+  studentPushSubscriptionService.sendTest(req.student!.id, req.body)
+);
+
 export const deleteStudentPushSubscription = ok((req) =>
   studentPushSubscriptionService.remove(req.student!.id, req.body)
 );

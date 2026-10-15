@@ -23,6 +23,13 @@ export class StudentPushSubscriptionRepository {
     }, { maxWait: 15_000, timeout: 30_000 });
   }
 
+  findOwned(studentId: string, endpoint: string) {
+    return prisma.studentPushSubscription.findFirst({
+      where: { studentId, endpoint },
+      select: { endpoint: true, p256dh: true, auth: true, expirationTime: true },
+    });
+  }
+
   async isOwned(studentId: string, endpoint: string) {
     return (await prisma.studentPushSubscription.count({ where: { studentId, endpoint } })) > 0;
   }
