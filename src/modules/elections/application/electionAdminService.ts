@@ -319,7 +319,7 @@ export class ElectionAdminService {
 
   /** Name, nickname, photo and manifesto can be corrected until results are published (logged). */
   async updateCandidate(user: StaffUser, id: string, candidateId: string, body: Record<string, unknown>, photo?: PhotoFile) {
-    this.require(user, 'setup');
+    this.require(user, 'editCandidate');
     const election = await this.load(id);
     if (!isCandidateProfileEditable(election.status)) throw new AppError(409, 'Results are published; candidates can no longer change.');
     const candidate = await this.repo.findCandidate(id, candidateId);
@@ -328,6 +328,8 @@ export class ElectionAdminService {
     if (body.displayName !== undefined) data.displayName = text(body.displayName, 'Candidate name', { max: 120, required: true });
     if (body.nickname !== undefined) data.nickname = text(body.nickname, 'Nickname', { max: 60, required: false });
     if (body.manifesto !== undefined) data.manifesto = text(body.manifesto, 'Manifesto', { max: MAX_MANIFESTO_LENGTH, required: false });
+    const movesCandidate = body.matricNumber !== undefined || (body.positionId !== undefined && body.positionId !== candidate.positionId);
+    if (movesCandidate && !canPerform(user.role, 'setup')) throw forbidden('Only the developer can change a candidate\'s matric number or position.');
     if (body.matricNumber !== undefined) {
       if (!isSetupEditable(election.status)) throw new AppError(409, 'The matric number is locked once the election is ready.');
       data.matricNumber = normalizeMatric(body.matricNumber) || null;

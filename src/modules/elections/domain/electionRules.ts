@@ -54,7 +54,9 @@ export type ElectionAction =
   | 'manageCommittee'
   | 'run'
   | 'previewResults'
-  | 'moderateVoters';
+  | 'moderateVoters'
+  /** Fix a candidate's name, nickname, photo or manifesto (both the developer and the committee). */
+  | 'editCandidate';
 
 /**
  * Separation of duties: the developer sets the election up, the electoral committee runs
@@ -62,7 +64,7 @@ export type ElectionAction =
  * the data model, not by a permission.
  */
 export function canPerform(role: StaffRole | string | undefined, action: ElectionAction): boolean {
-  if (role === 'dev') return action === 'view' || action === 'setup' || action === 'manageCommittee';
+  if (role === 'dev') return action === 'view' || action === 'setup' || action === 'manageCommittee' || action === 'editCandidate';
   if (role === 'electoral_committee') return action !== 'setup' && action !== 'manageCommittee';
   return false;
 }

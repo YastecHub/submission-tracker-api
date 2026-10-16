@@ -216,7 +216,7 @@ test('a new election starts with the whole class list as its voter list', async 
 test('the seeded class list file is valid: 126 students with matric numbers plus the JUPEB students by email', () => {
   const rows = loadClassList();
   assert.equal(rows.filter((row) => !row.emailOnly).length, 126);
-  assert.equal(rows.filter((row) => row.emailOnly).length, 12);
+  assert.equal(rows.filter((row) => row.emailOnly).length, 13);
   assert.ok(rows.filter((row) => row.emailOnly).every((row) => row.email && row.matricNumber.startsWith('JUPEB-')));
   assert.equal(new Set(rows.map((row) => row.matricNumber)).size, rows.length);
   assert.equal(rows.find((row) => row.matricNumber === '251106026')?.fullName, 'OYEBO, Yasir Oladimeji');
@@ -268,4 +268,16 @@ test('results notice goes to everyone on the list with an account, including stu
   await ctx.notifier.runDue();
   assert.deepEqual(ctx.notices.state.pushed.map((push) => [push.subscriptionId, push.message.title]), [['phone-a', 'Results are out'], ['phone-b', 'Results are out']]);
   assert.equal(ctx.emails.length, 0, 'only "voting is open" is emailed');
+});
+
+test('the committee can fix a candidate\'s name, nickname and manifesto, but not the matric number; class reps cannot', async () => {
+  const ctx = await setup();
+  await openNow(ctx);
+  const candidate = ctx.election.positions[0].candidates[0];
+  const detail = await ctx.admin.updateCandidate(officerA, ctx.election.id, candidate.id, { displayName: 'Ada B. Lovelace', nickname: 'Ada', manifesto: 'Updated by the committee.' });
+  const updated = detail.positions[0].candidates[0];
+  assert.deepEqual([updated.displayName, updated.nickname, updated.manifesto], ['Ada B. Lovelace', 'Ada', 'Updated by the committee.']);
+  assert.ok(ctx.db.audit.some((entry: any) => entry.action === 'candidate-edited' && entry.actorName === officerA.name));
+  await assert.rejects(ctx.admin.updateCandidate(officerA, ctx.election.id, candidate.id, { matricNumber: '251106099' }), /Only the developer/);
+  await assert.rejects(ctx.admin.updateCandidate(rep, ctx.election.id, candidate.id, { manifesto: 'x' }), /electoral committee/);
 });
