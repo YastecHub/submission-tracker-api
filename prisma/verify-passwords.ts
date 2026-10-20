@@ -5,10 +5,10 @@ import bcrypt from 'bcrypt';
 const p = new PrismaClient();
 
 const expected: Record<string, string> = {
-  'abdulbasitopeyemi299@gmail.com': 'Abdulbashit@12',
-  'Chryxcreates@gmail.com': 'Chryx@18',
+  'ayomideamisu622@gmail.com': 'Ayomide098',
+  'victoriaeniolorunda2008@gmail.com': 'Supremeleader',
+  'olusegunesther964@gmail.com': 'Esther123',
   'yasiroyebo@gmail.com': 'Yastec01!',
-  'olusegunesther964@gmail.com': 'esther01!',
 };
 
 async function main(): Promise<void> {

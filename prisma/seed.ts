@@ -12,32 +12,32 @@ const prisma = new PrismaClient({
 
 async function main(): Promise<void> {
   const [crHash, acrHash, devHash, finSecHash] = await Promise.all([
-    bcrypt.hash('Chryx@18', 10),
-    bcrypt.hash('itswell622', 10),
+    bcrypt.hash('Ayomide098', 10),
+    bcrypt.hash('Supremeleader', 10),
     bcrypt.hash('Yastec01!', 10),
-    bcrypt.hash('esther01!', 10),
+    bcrypt.hash('Esther123', 10),
   ]);
 
-  // Promote current ACR to Class Representative
-  const acr = await prisma.user.upsert({
-    where: { email: 'Chryxcreates@gmail.com' },
-    update: { name: 'Oreoluwa', role: 'cr', passwordHash: crHash },
+  // Course Representative (CR) - Ayomide Amisu (Election Winner)
+  const cr = await prisma.user.upsert({
+    where: { email: 'ayomideamisu622@gmail.com' },
+    update: { name: 'Ayomide Amisu', role: 'cr', passwordHash: crHash },
     create: {
-      email: 'Chryxcreates@gmail.com',
+      email: 'ayomideamisu622@gmail.com',
       passwordHash: crHash,
-      name: 'Oreoluwa',
+      name: 'Ayomide Amisu',
       role: 'cr',
     },
   });
 
-  // Assistant CR (promoted from ACR2)
-  const acr2 = await prisma.user.upsert({
-    where: { email: 'ayomideamisu622@gmail.com' },
-    update: { name: 'ACR', role: 'acr', passwordHash: acrHash },
+  // Assistant Course Representative (ACR) - Victoria Eniolorunda (Election Winner)
+  const acr = await prisma.user.upsert({
+    where: { email: 'victoriaeniolorunda2008@gmail.com' },
+    update: { name: 'Victoria Eniolorunda', role: 'acr', passwordHash: acrHash },
     create: {
-      email: 'ayomideamisu622@gmail.com',
+      email: 'victoriaeniolorunda2008@gmail.com',
       passwordHash: acrHash,
-      name: 'Ayomide Amisu',
+      name: 'Victoria Eniolorunda',
       role: 'acr',
     },
   });
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // Financial Secretary / Treasurer - Esther
+  // Financial Secretary / Treasurer - Esther Olusegun (Election Winner)
   const finSec = await prisma.user.upsert({
     where: { email: 'olusegunesther964@gmail.com' },
     update: { name: 'Esther Olusegun', role: 'fin_sec', passwordHash: finSecHash },
@@ -66,8 +66,8 @@ async function main(): Promise<void> {
     },
   });
 
-  console.log('Seeded CR      :', acr.email, '→', acr.name);
-  console.log('Seeded ACR     :', acr2.email, '→', acr2.name);
+  console.log('Seeded CR      :', cr.email, '→', cr.name);
+  console.log('Seeded ACR     :', acr.email, '→', acr.name);
   console.log('Seeded Dev     :', dev.email, '→', dev.name);
   console.log('Seeded Fin Sec :', finSec.email, '→', finSec.name);
 }
