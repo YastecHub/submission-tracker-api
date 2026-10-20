@@ -8,6 +8,7 @@ import logger from '../../../lib/logger';
 import { paymentReceiptRepository, PaymentReceiptRepository } from '../infrastructure/paymentReceiptRepository';
 import { cacheDeletePrefix } from '../../../utils/cache';
 import { isClassRep } from '../../auth/domain/classRepAccess';
+import { pushNotificationService } from '../../notifications/pushNotificationService';
 
 const MAX_EXPORT_ROWS = 10_000;
 
@@ -55,6 +56,13 @@ export class PaymentReceiptService {
     }
 
     void checkReceiptAmountInBackground({ receiptId: receipt.id, receiptUrl: uploaded.url, expectedAmount: event.amount }).catch((err) => logger.error('[receipt amount check] Background check failed:', { error: err, receiptId: receipt.id }));
+
+    void pushNotificationService.notifyClassReps({
+      title: `New Receipt: ${event.title}`,
+      body: `${fullName} (${matricNumber}) submitted a payment receipt.`,
+      url: `/dashboard/payments/${event.id}`,
+    }).catch(() => undefined);
+
     return { receipt: responseReceipt };
   }
 
@@ -99,6 +107,15 @@ export class PaymentReceiptService {
     const ticketQrCode = receipt.event.hasTickets && !receipt.ticketQrCode ? await generateQR(receipt.id) : undefined;
     const updated = await this.repository.confirm(id, { confirmedBy: user!.name, recordedBy: user!.id, note: input.note, ticketQrCode });
     cacheDeletePrefix('ledger:');
+
+    void pushNotificationService.notifyStudentByMatric(receipt.matricNumber, {
+      title: 'Payment Confirmed! 🎟️',
+      body: `Your payment for "${receipt.event.title}" has been confirmed.${receipt.event.hasTickets ? ' Your event ticket is ready!' : ''}`,
+      url: `/payment/${receipt.event.slug}/my-tickets`,
+      tag: `receipt-confirmed-${receipt.id}`,
+      priority: 'important',
+    }).catch(() => undefined);
+
     return updated;
   }
 
@@ -108,6 +125,15 @@ export class PaymentReceiptService {
     if (!isClassRep(user?.role)) throw forbidden('You are not allowed to reject this receipt');
     const updated = await this.repository.reject(id, { confirmedBy: user!.name, note: input.note });
     cacheDeletePrefix('ledger:');
+
+    void pushNotificationService.notifyStudentByMatric(receipt.matricNumber, {
+      title: 'Payment Receipt Notice ⚠️',
+      body: `Your receipt for "${receipt.event.title}" was not approved.${input.note ? ` Note: ${input.note}` : ' Please check with a class rep.'}`,
+      url: `/payment/${receipt.event.slug}`,
+      tag: `receipt-rejected-${receipt.id}`,
+      priority: 'important',
+    }).catch(() => undefined);
+
     return updated;
   }
 

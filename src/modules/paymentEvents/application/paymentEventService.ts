@@ -4,6 +4,7 @@ import { generateQR } from '../../../utils/qrGenerator';
 import { badRequest, notFound } from '../../../shared/errors/AppError';
 import { paymentEventRepository, PaymentEventRepository } from '../infrastructure/paymentEventRepository';
 import { PICNIC_LEGACY_EVENT_ID, PICNIC_PAYMENT_EVENT_ID } from '../domain/picnic';
+import { pushNotificationService } from '../../notifications/pushNotificationService';
 
 export class PaymentEventService {
   constructor(private readonly repository: PaymentEventRepository) {}
@@ -90,7 +91,7 @@ export class PaymentEventService {
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) throw badRequest('amount must be a positive number');
     if (Number.isNaN(deadline.getTime()) || deadline <= new Date()) throw badRequest('deadline must be a valid future date');
 
-    return this.repository.create({
+    const event = await this.repository.create({
       slug: await uniquePaymentSlug(title),
       title,
       description,
@@ -102,6 +103,16 @@ export class PaymentEventService {
       hasTickets: !!input.hasTickets,
       createdBy: input.userId,
     });
+
+    void pushNotificationService.broadcastToStudents({
+      title: `New Payment Event: ${title}`,
+      body: `Amount: ₦${parsedAmount.toLocaleString()} – Due ${deadline.toLocaleDateString('en-GB')}`,
+      url: `/payment/${event.slug}`,
+      tag: `payment-new-${event.id}`,
+      priority: 'important',
+    }).catch(() => undefined);
+
+    return event;
   }
 
   async getPublicBySlug(slug: string) {

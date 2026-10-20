@@ -7,6 +7,7 @@ import {
   SubmissionEventRepository,
   SubmissionEventWithCount,
 } from '../infrastructure/submissionEventRepository';
+import { pushNotificationService } from '../../notifications/pushNotificationService';
 
 const EVENT_TYPES: EventType[] = ['assignment', 'attendance', 'lab', 'other'];
 
@@ -68,7 +69,7 @@ export class SubmissionEventService {
       throw badRequest('deadline must be a valid future date');
     }
 
-    return this.repository.create({
+    const event = await this.repository.create({
       slug: await uniqueSlug(courseCode, title),
       title,
       courseCode,
@@ -77,6 +78,16 @@ export class SubmissionEventService {
       deadline,
       createdBy: input.userId,
     });
+
+    void pushNotificationService.broadcastToStudents({
+      title: `New ${type === 'attendance' ? 'Attendance' : 'Assignment'}: ${courseCode}`,
+      body: `${title} - Due ${deadline.toLocaleDateString('en-GB')}`,
+      url: `/submitit/${event.slug}`,
+      tag: `event-new-${event.id}`,
+      priority: 'important',
+    }).catch(() => undefined);
+
+    return event;
   }
 
   async getPublicBySlug(slug: string) {

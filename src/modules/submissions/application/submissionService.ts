@@ -5,6 +5,7 @@ import { sendPush } from '../../../utils/pushNotifier';
 import { AppError, badRequest, forbidden, notFound } from '../../../shared/errors/AppError';
 import { submissionRepository, SubmissionRepository } from '../infrastructure/submissionRepository';
 import { isClassRep } from '../../auth/domain/classRepAccess';
+import { pushNotificationService } from '../../notifications/pushNotificationService';
 
 const CONFIRM_ALL_MIN_SUBMISSIONS = 90;
 const MAX_EXPORT_ROWS = 10_000;
@@ -73,7 +74,16 @@ export class SubmissionService {
     const submission = await this.repository.findByIdWithEvent(id);
     if (!submission) throw notFound('Submission not found');
     if (!isClassRep(user?.role)) throw forbidden('You are not allowed to confirm this submission');
-    return this.repository.confirm(id, user!.name);
+    const result = await this.repository.confirm(id, user!.name);
+
+    void pushNotificationService.notifyStudentByMatric(submission.matricNumber, {
+      title: 'Submission Verified! ✅',
+      body: `Your submission for "${submission.event.courseCode}: ${submission.event.title}" has been confirmed.`,
+      url: '/student',
+      tag: `sub-confirmed-${submission.id}`,
+    }).catch(() => undefined);
+
+    return result;
   }
 
   async scanConfirm(submissionId: string | undefined, user: Express.Request['user']) {
@@ -82,7 +92,16 @@ export class SubmissionService {
     if (!submission) throw notFound('Submission not found');
     if (!isClassRep(user?.role)) throw forbidden('You are not allowed to confirm this submission');
     if (submission.isConfirmed) return { alreadyConfirmed: true, submission };
-    return { alreadyConfirmed: false, submission: await this.repository.confirm(submissionId, user!.name) };
+    const confirmed = await this.repository.confirm(submissionId, user!.name);
+
+    void pushNotificationService.notifyStudentByMatric(submission.matricNumber, {
+      title: 'Submission Verified! ✅',
+      body: `Your submission for "${submission.event.courseCode}: ${submission.event.title}" has been confirmed.`,
+      url: '/student',
+      tag: `sub-confirmed-${submission.id}`,
+    }).catch(() => undefined);
+
+    return { alreadyConfirmed: false, submission: confirmed };
   }
 
   async confirmAll(eventId: string, user: Express.Request['user']) {
