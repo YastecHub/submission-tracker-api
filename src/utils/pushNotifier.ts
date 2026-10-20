@@ -35,7 +35,9 @@ export async function sendPush(
       ? Number((err as { statusCode?: unknown }).statusCode)
       : undefined;
     const message = err instanceof Error ? err.message.slice(0, 500) : 'Push delivery failed';
-    if (statusCode === 404 || statusCode === 410) return { outcome: 'invalid', statusCode, message };
+    if (statusCode === 401 || statusCode === 403 || statusCode === 404 || statusCode === 410) {
+      return { outcome: 'invalid', statusCode, message };
+    }
     return { outcome: 'retry', statusCode, message };
   }
 }

@@ -22,13 +22,13 @@ interface TokenPayload {
 export function startSocketServer(httpServer: HttpServer, isAllowedOrigin: (origin: string | undefined) => boolean): Server {
   const io = new Server(httpServer, {
     path: '/socket.io',
-    cors: { origin: (origin, callback) => callback(null, isAllowedOrigin(origin)), credentials: true },
+    cors: { origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => callback(null, isAllowedOrigin(origin)), credentials: true },
     pingInterval: 20_000,
     pingTimeout: 20_000,
     serveClient: false,
   });
 
-  io.use(async (socket, next) => {
+  io.use(async (socket: any, next: (err?: any) => void) => {
     try {
       const token = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : '';
       if (!token) return next(new Error('unauthorized'));
@@ -48,7 +48,7 @@ export function startSocketServer(httpServer: HttpServer, isAllowedOrigin: (orig
     }
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', (socket: any) => {
     void socket.join('signed-in');
     if (socket.data.studentId) void socket.join(`student:${socket.data.studentId}`);
     if (socket.data.staffId) void socket.join('staff');

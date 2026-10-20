@@ -5,7 +5,7 @@ export class PaymentReceiptRepository {
   findEventById(eventId: string) {
     return prisma.paymentEvent.findUnique({
       where: { id: eventId },
-      select: { id: true, amount: true, deadline: true, hasTickets: true, isClosed: true, isDeleted: true },
+      select: { id: true, title: true, slug: true, amount: true, deadline: true, hasTickets: true, isClosed: true, isDeleted: true },
     });
   }
 
@@ -41,7 +41,7 @@ export class PaymentReceiptRepository {
     return prisma.paymentReceipt.findUnique({
       where: { id },
       include: {
-        event: { select: { id: true, createdBy: true, hasTickets: true, amount: true, title: true } },
+        event: { select: { id: true, createdBy: true, hasTickets: true, amount: true, title: true, slug: true } },
         transaction: { select: { id: true, isDeleted: true } },
       },
     });

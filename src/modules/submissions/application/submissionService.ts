@@ -11,7 +11,7 @@ const CONFIRM_ALL_MIN_SUBMISSIONS = 90;
 const MAX_EXPORT_ROWS = 10_000;
 
 export class SubmissionService {
-  constructor(private readonly repository: SubmissionRepository) {}
+  constructor(private readonly repository: SubmissionRepository) { }
 
   async create(input: { eventId?: string; fullName?: string; matricNumber?: string; level?: string }) {
     if (!input.eventId || !input.fullName || !input.matricNumber) {

@@ -38,7 +38,10 @@ export class SubmissionRepository {
   }
 
   findByIdWithEvent(id: string) {
-    return prisma.submission.findUnique({ where: { id }, include: { event: { select: { createdBy: true } } } });
+    return prisma.submission.findUnique({
+      where: { id },
+      include: { event: { select: { createdBy: true, courseCode: true, title: true } } },
+    });
   }
 
   confirm(id: string, confirmerName: string) {

@@ -95,15 +95,20 @@ export class PushNotificationService {
       });
 
       await Promise.allSettled(
-        reps.map((rep) =>
-          rep.pushSubscription
-            ? sendPush(rep.pushSubscription, {
-                title: message.title,
-                body: message.body,
-                url: message.url,
-              })
-            : Promise.resolve()
-        )
+        reps.map(async (rep) => {
+          if (!rep.pushSubscription) return;
+          const result = await sendPush(rep.pushSubscription, {
+            title: message.title,
+            body: message.body,
+            url: message.url,
+          });
+          if (result.outcome === 'invalid') {
+            await prisma.user.update({
+              where: { id: rep.id },
+              data: { pushSubscription: null },
+            }).catch(() => {});
+          }
+        })
       );
     } catch (error) {
       logger.error('[push class reps error]', { error: error instanceof Error ? error.message : error });
