@@ -2,24 +2,38 @@ import { Prisma } from '@prisma/client';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import prisma from '../lib/prisma';
+import { judgeAmount, pickBestAmount } from './receiptAmountRules';
 
 type CheckStatus = 'matched' | 'mismatch' | 'unreadable' | 'unavailable';
 
 interface ExtractedAmount {
   found: boolean;
+  /** Amount sent to the recipient, without bank charges. */
   amount: number | null;
+  /** Bank/transfer charges, if shown separately. */
+  fee?: number | null;
+  /** Total taken from the account (amount + charges), if shown. */
+  total_debited?: number | null;
   currency: string | null;
   confidence: number;
   reason: string;
 }
 
+/** Groq shut these models down (Llama 4 Scout on 17 July 2026), so an old setting falls back to the default. */
+const RETIRED_MODELS = new Set([
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+  'meta-llama/llama-4-maverick-17b-128e-instruct',
+]);
+const DEFAULT_RECEIPT_MODEL = 'qwen/qwen3.8-27b';
+
+function receiptModel(): string {
+  const configured = process.env.GROQ_RECEIPT_MODEL?.trim();
+  return configured && !RETIRED_MODELS.has(configured) ? configured : DEFAULT_RECEIPT_MODEL;
+}
+
 function toDecimalAmount(value: number | null): Prisma.Decimal | null {
   if (value === null || !Number.isFinite(value) || value <= 0) return null;
   return new Prisma.Decimal(value.toFixed(2));
-}
-
-function amountsMatch(actual: Prisma.Decimal, expected: Prisma.Decimal): boolean {
-  return actual.mul(100).round().equals(expected.mul(100).round());
 }
 
 function parseGroqContent(data: unknown): string | null {
@@ -44,7 +58,7 @@ function parseJsonObject(raw: string): ExtractedAmount | null {
   }
 }
 
-function parseOcrAmount(text: string): { amount: Prisma.Decimal; confidence: number; note: string } | null {
+function parseOcrAmount(text: string, expected: Prisma.Decimal): { amount: Prisma.Decimal; confidence: number; note: string } | null {
   const normalized = text.replace(/\s+/g, ' ');
   const patterns = [
     /(?:amount|total|paid|debit|transferred|sent|ngn|₦|n)\s*[:\-]?\s*₦?\s*([0-9][0-9,\s]*(?:\.[0-9]{1,2})?)/gi,
@@ -52,25 +66,24 @@ function parseOcrAmount(text: string): { amount: Prisma.Decimal; confidence: num
     /\bNGN\s*([0-9][0-9,\s]*(?:\.[0-9]{1,2})?)/gi,
   ];
 
-  const candidates: number[] = [];
+  const candidates: Prisma.Decimal[] = [];
   for (const pattern of patterns) {
     for (const match of normalized.matchAll(pattern)) {
       const parsed = Number(match[1].replace(/[,\s]/g, ''));
-      if (Number.isFinite(parsed) && parsed > 0) candidates.push(parsed);
+      if (Number.isFinite(parsed) && parsed > 0) candidates.push(new Prisma.Decimal(parsed.toFixed(2)));
     }
   }
 
-  if (candidates.length === 0) return null;
-
-  const amount = Math.max(...candidates);
+  const amount = pickBestAmount(candidates, expected);
+  if (!amount) return null;
   return {
-    amount: new Prisma.Decimal(amount.toFixed(2)),
+    amount,
     confidence: candidates.length > 1 ? 0.55 : 0.65,
     note: 'Fallback OCR extracted a likely receipt amount.',
   };
 }
 
-async function extractWithFallbackOcr(receiptUrl: string): Promise<{
+async function extractWithFallbackOcr(receiptUrl: string, expected: Prisma.Decimal): Promise<{
   amount: Prisma.Decimal;
   confidence: number;
   note: string;
@@ -123,7 +136,7 @@ async function extractWithFallbackOcr(receiptUrl: string): Promise<{
     });
   });
 
-  return text ? parseOcrAmount(text) : null;
+  return text ? parseOcrAmount(text, expected) : null;
 }
 
 async function markReceipt(
@@ -157,12 +170,14 @@ export async function checkReceiptAmountInBackground(args: {
   let groqNote = '';
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8_000);
+  // Runs in the background after the student submits, so it can wait for a slower vision model.
+  const timeout = setTimeout(() => controller.abort(), 25_000);
 
   try {
     if (!apiKey) {
       groqNote = 'Groq AI amount check skipped because GROQ_API_KEY is not configured.';
     } else {
+      const model = receiptModel();
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         signal: controller.signal,
@@ -171,9 +186,11 @@ export async function checkReceiptAmountInBackground(args: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: process.env.GROQ_RECEIPT_MODEL ?? 'meta-llama/llama-4-scout-17b-16e-instruct',
+          model,
           temperature: 0,
-          max_completion_tokens: 160,
+          max_completion_tokens: 300,
+          // Qwen models reason by default; a receipt amount doesn't need it, and JSON mode requires hidden reasoning.
+          ...(model.startsWith('qwen/') ? { reasoning_effort: 'none', reasoning_format: 'hidden' } : {}),
           response_format: { type: 'json_object' },
           messages: [
           {
@@ -183,10 +200,13 @@ export async function checkReceiptAmountInBackground(args: {
                 type: 'text',
                 text:
                   'Return only valid JSON matching this shape: ' +
-                  '{"found": boolean, "amount": number|null, "currency": string|null, "confidence": number, "reason": string}. ' +
-                  'Extract the final amount paid from this payment receipt. ' +
-                  'Use NGN/Naira when currency is visible. ' +
-                  'If several amounts appear, choose the final debited/transferred amount. ' +
+                  '{"found": boolean, "amount": number|null, "fee": number|null, "total_debited": number|null, "currency": string|null, "confidence": number, "reason": string}. ' +
+                  'This is a Nigerian bank transfer or payment receipt. ' +
+                  '"amount" is the amount sent to the recipient, WITHOUT bank charges, fees, VAT or stamp duty. ' +
+                  '"fee" is the total of any charges/fees shown separately, else null. ' +
+                  '"total_debited" is the total taken from the account if shown (amount plus charges), else null. ' +
+                  'Never use an account balance, available balance or reference number as an amount. ' +
+                  'Amounts are in Naira (NGN, ₦); write them as plain numbers without commas. ' +
                   'If no amount is readable, set found to false.',
               },
               {
@@ -217,13 +237,15 @@ export async function checkReceiptAmountInBackground(args: {
     clearTimeout(timeout);
   }
 
-  let extractedAmount = extraction?.found ? toDecimalAmount(extraction.amount) : null;
+  let extractedAmount = extraction?.found ? toDecimalAmount(extraction.amount) ?? toDecimalAmount(extraction.total_debited ?? null) : null;
+  const fee = extraction?.found ? toDecimalAmount(extraction.fee ?? null) : null;
+  const totalDebited = extraction?.found ? toDecimalAmount(extraction.total_debited ?? null) : null;
   let confidence = extraction?.confidence ?? null;
   let note = extraction?.reason ?? groqNote;
 
   if (!extractedAmount) {
     try {
-      const fallback = await extractWithFallbackOcr(args.receiptUrl);
+      const fallback = await extractWithFallbackOcr(args.receiptUrl, args.expectedAmount);
       if (fallback) {
         extractedAmount = fallback.amount;
         confidence = fallback.confidence;
@@ -235,15 +257,16 @@ export async function checkReceiptAmountInBackground(args: {
   }
 
   if (extractedAmount) {
-    const status: CheckStatus = amountsMatch(extractedAmount, args.expectedAmount) ? 'matched' : 'mismatch';
-    await markReceipt(args.receiptId, status, {
-      extractedAmount,
-      confidence,
-      note:
-        status === 'matched'
-          ? 'Extracted receipt amount matches the expected payment amount.'
-          : `Extracted ${extractedAmount.toString()} but expected ${args.expectedAmount.toString()}.`,
-    });
+    let verdict = judgeAmount(extractedAmount, args.expectedAmount, fee);
+    // The model may have read the amount with charges as "amount"; the total with charges can still match.
+    if (verdict.status === 'mismatch' && totalDebited && !totalDebited.equals(extractedAmount)) {
+      const withTotal = judgeAmount(totalDebited, args.expectedAmount, fee);
+      if (withTotal.status === 'matched') {
+        verdict = withTotal;
+        extractedAmount = totalDebited;
+      }
+    }
+    await markReceipt(args.receiptId, verdict.status, { extractedAmount, confidence, note: verdict.note });
     return;
   }
 
