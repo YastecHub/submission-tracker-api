@@ -4,10 +4,14 @@ import { generateQR } from '../../../utils/qrGenerator';
 import { badRequest, notFound } from '../../../shared/errors/AppError';
 import { paymentEventRepository, PaymentEventRepository } from '../infrastructure/paymentEventRepository';
 import { PICNIC_LEGACY_EVENT_ID, PICNIC_PAYMENT_EVENT_ID } from '../domain/picnic';
-import { pushNotificationService } from '../../notifications/pushNotificationService';
+import { pushNotificationService, type PushNotificationService } from '../../notifications/pushNotificationService';
+import { paymentEventChanges } from '../domain/paymentEventChanges';
 
 export class PaymentEventService {
-  constructor(private readonly repository: PaymentEventRepository) {}
+  constructor(
+    private readonly repository: PaymentEventRepository,
+    private readonly notifier: Pick<PushNotificationService, 'broadcastToStudents'> = pushNotificationService,
+  ) {}
 
   async list(query: { page?: string; limit?: string }) {
     const page = Math.max(1, parseInt(query.page ?? '') || 1);
@@ -135,15 +139,35 @@ export class PaymentEventService {
     };
   }
 
-  async update(id: string, input: { hasTickets?: boolean; description?: string }) {
+  /**
+   * Edits any detail, even while students are paying. Receipts already submitted keep their
+   * price (students who paid the old price stay paid). Students are told when the price or
+   * the account to pay into changes.
+   */
+  async update(id: string, input: Record<string, unknown>) {
     const event = await this.repository.findManageableById(id);
     if (!event) throw notFound('Payment event not found');
 
-    const updates: { hasTickets?: boolean; description?: string | null } = {};
-    if (input.hasTickets !== undefined) updates.hasTickets = !!input.hasTickets;
-    if (input.description !== undefined) updates.description = input.description?.trim() || null;
+    let changes;
+    try {
+      changes = paymentEventChanges(event, input ?? {});
+    } catch (error) {
+      throw badRequest(error instanceof Error ? error.message : 'Invalid payment details');
+    }
+    const { updates, announce } = changes;
+    if (!Object.keys(updates).length) return event;
 
     const updated = await this.repository.update(id, updates);
+
+    if (announce.length) {
+      void this.notifier.broadcastToStudents({
+        title: `Payment update: ${updated.title}`,
+        body: announce.join(' '),
+        url: `/payment/${updated.slug}`,
+        tag: `payment-update-${updated.id}`,
+        priority: 'important',
+      }).catch(() => undefined);
+    }
 
     if (!event.hasTickets && updates.hasTickets === true) {
       const receipts = await this.repository.confirmedReceiptsWithoutTickets(id);

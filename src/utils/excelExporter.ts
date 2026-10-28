@@ -105,7 +105,7 @@ export function exportPaymentReceipts(
     r.fullName,
     r.matricNumber,
     r.level ?? '',
-    event.amount.toString(),
+    r.expectedAmount.toString(),
     r.extractedAmount?.toString() ?? '',
     r.amountCheckStatus,
     r.amountCheckNote ?? '',

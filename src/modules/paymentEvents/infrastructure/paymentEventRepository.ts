@@ -91,7 +91,7 @@ export class PaymentEventRepository {
     ]);
   }
 
-  update(id: string, data: { hasTickets?: boolean; description?: string | null }) {
+  update(id: string, data: Prisma.PaymentEventUpdateInput) {
     return prisma.paymentEvent.update({ where: { id }, data });
   }
 

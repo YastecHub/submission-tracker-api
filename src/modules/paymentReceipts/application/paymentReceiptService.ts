@@ -42,7 +42,7 @@ export class PaymentReceiptService {
 
     let receipt;
     try {
-      receipt = await this.repository.create({ eventId: input.eventId, fullName, matricNumber, level, receiptUrl: uploaded.url, receiptPublicId: uploaded.publicId });
+      receipt = await this.repository.create({ eventId: input.eventId, fullName, matricNumber, level, expectedAmount: event.amount, receiptUrl: uploaded.url, receiptPublicId: uploaded.publicId });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new AppError(409, 'You have already submitted a receipt for this payment');
@@ -179,7 +179,7 @@ export class PaymentReceiptService {
         receiptId: receipt.id,
         eventTitle: receipt.event.title,
         eventSlug: receipt.event.slug,
-        amount: receipt.event.amount.toString(),
+        amount: receipt.expectedAmount.toString(),
         fullName: receipt.fullName,
         matricNumber: receipt.matricNumber,
         ticketQrCode: qr,

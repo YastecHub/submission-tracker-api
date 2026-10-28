@@ -428,6 +428,8 @@ model PaymentReceipt {
   fullName              String
   matricNumber          String
   level                 String?
+  /// The payment's price when this receipt was submitted (the price can change later).
+  expectedAmount        Decimal           @db.Decimal(10, 2)
   extractedAmount       Decimal?          @db.Decimal(10, 2)
   amountCheckStatus     AmountCheckStatus @default(pending)
   amountCheckConfidence Float?

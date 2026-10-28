@@ -17,7 +17,7 @@ export class PaymentReceiptRepository {
     return prisma.paymentReceipt.findUnique({ where: { matricNumber_eventId: { matricNumber, eventId } } });
   }
 
-  create(data: { eventId: string; fullName: string; matricNumber: string; level: string | null; receiptUrl: string; receiptPublicId: string }) {
+  create(data: { eventId: string; fullName: string; matricNumber: string; level: string | null; expectedAmount: Prisma.Decimal; receiptUrl: string; receiptPublicId: string }) {
     return prisma.paymentReceipt.create({ data });
   }
 
@@ -78,7 +78,8 @@ export class PaymentReceiptRepository {
           await tx.transaction.create({
             data: {
               type: 'credit',
-              amount: receipt.event.amount,
+              // The price the student paid against, even if the payment's price changed since.
+              amount: receipt.expectedAmount,
               description: `Payment: ${receipt.event.title} - ${receipt.matricNumber}`,
               category: 'Dues',
               occurredAt: now,
