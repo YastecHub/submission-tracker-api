@@ -12,8 +12,12 @@ const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 export const MAX_PREFERRED_NAME = 40;
 
-/** Email goes out at 7 am, classmates are told at 8 am (Lagos time). */
-export const EMAIL_HOUR = 7;
+/**
+ * Lagos time: the email is waiting in their inbox from midnight (it makes no sound);
+ * the notification to the birthday person goes at 7 am and to classmates at 8 am, so
+ * nobody's phone buzzes at night.
+ */
+export const SELF_PUSH_HOUR = 7;
 export const CLASSMATES_HOUR = 8;
 
 export interface MonthDay {

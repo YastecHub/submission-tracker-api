@@ -18,7 +18,7 @@ export interface BirthdayStudent {
 }
 
 type PhotoUploader = (buffer: Buffer) => Promise<{ url: string; publicId: string }>;
-type Store = Pick<BirthdayRepository, 'findForStudent' | 'upsert' | 'onDates'>;
+type Store = Pick<BirthdayRepository, 'findForStudent' | 'upsert' | 'onDates' | 'findStudentByEmail'>;
 
 const defaultUploader: PhotoUploader = (buffer) => uploadImageBuffer(buffer, 'nexium-birthdays');
 
@@ -56,6 +56,20 @@ export class StudentBirthdayService {
       today: celebrating
         .filter((entry) => entry.studentId !== student.id && entry.shareWithClass)
         .map((entry) => ({ name: displayName(entry.student.fullName, entry.preferredName), photoUrl: entry.photoUrl })),
+    };
+  }
+
+  /**
+   * For a class rep on the staff dashboard: is it their birthday today? Their staff account
+   * is matched to their student account by email.
+   */
+  async forStaff(user: { email: string; name: string }, now: Date = new Date()) {
+    const student = await this.store.findStudentByEmail(user.email);
+    const birthday = student?.birthday;
+    const isMyBirthday = !!birthday && isBirthdayToday(birthday, lagosToday(now));
+    return {
+      isMyBirthday,
+      greetingName: greetingName(student?.fullName ?? user.name, birthday?.preferredName ?? null),
     };
   }
 

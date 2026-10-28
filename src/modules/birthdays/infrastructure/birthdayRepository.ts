@@ -60,6 +60,18 @@ export class BirthdayRepository {
     }
   }
 
+  async releaseCelebration(studentId: string, year: number, kind: string): Promise<void> {
+    await prisma.birthdayCelebration.deleteMany({ where: { studentId, year, kind } });
+  }
+
+  /** The student account of a staff member (same email), with its birthday, if any. */
+  findStudentByEmail(email: string) {
+    return prisma.studentAccount.findFirst({
+      where: { email: { equals: email.trim(), mode: 'insensitive' }, suspendedAt: null },
+      select: { id: true, fullName: true, birthday: true },
+    });
+  }
+
   /** Push subscriptions of everyone except these students (classmates of the birthday person). */
   async classmateSubscriptions(excludeStudentIds: string[]) {
     const rows = await prisma.studentPushSubscription.findMany({

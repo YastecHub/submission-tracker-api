@@ -2,10 +2,10 @@ import logger from '../../../lib/logger';
 import { isEmailConfigured, sendBirthdayEmail } from '../../../utils/mailer';
 import { isPushConfigured } from '../../../utils/pushNotifier';
 import { notificationDeliveryWorker } from '../../announcements/application/notificationDeliveryWorker';
-import { birthdaysCelebratedOn, CLASSMATES_HOUR, displayName, EMAIL_HOUR, greetingName, lagosToday } from '../domain/birthdayRules';
+import { birthdaysCelebratedOn, CLASSMATES_HOUR, displayName, greetingName, lagosToday, SELF_PUSH_HOUR } from '../domain/birthdayRules';
 import { birthdayRepository, type BirthdayRepository } from '../infrastructure/birthdayRepository';
 
-type Store = Pick<BirthdayRepository, 'onDates' | 'claimCelebration' | 'classmateSubscriptions' | 'studentSubscriptions' | 'enqueuePush'>;
+type Store = Pick<BirthdayRepository, 'onDates' | 'claimCelebration' | 'releaseCelebration' | 'classmateSubscriptions' | 'studentSubscriptions' | 'enqueuePush'>;
 
 export interface CelebratorOptions {
   sendEmail?: typeof sendBirthdayEmail;
@@ -16,7 +16,8 @@ export interface CelebratorOptions {
 
 /**
  * Celebrates today's birthdays (Lagos time):
- *  - 7 am: a birthday email and a notification to the birthday person;
+ *  - from midnight: the birthday email (retried every few minutes if sending fails);
+ *  - 7 am: a notification to the birthday person;
  *  - 8 am: a notification to classmates, only if the birthday person agreed to share it.
  * Each is recorded once per year, so restarts and several servers never send twice.
  * If the server starts later in the day, today's celebrations still go out.
@@ -36,31 +37,37 @@ export class BirthdayCelebrator {
 
   async runDue(now: Date = new Date()): Promise<void> {
     const today = lagosToday(now);
-    if (today.hour < EMAIL_HOUR) return;
     const birthdays = await this.store.onDates(birthdaysCelebratedOn(today));
     for (const birthday of birthdays) {
       const { student } = birthday;
-      if (await this.store.claimCelebration(student.id, today.year, 'email')) {
-        const name = greetingName(student.fullName, birthday.preferredName);
-        if (this.pushEnabled()) {
-          await this.store.enqueuePush(await this.store.studentSubscriptions(student.id), {
-            title: `Happy birthday, ${name}! 🎂`,
-            body: 'The whole class is celebrating you today. Open NEXIUM for your flowers 💐',
-            url: '/student',
-            tag: `birthday-self-${student.id}-${today.year}`,
-          });
-          this.deliverNow();
-        }
-        if (this.emailEnabled()) {
-          await this.sendEmail(name, student.email).catch((error) => logger.warn('[birthdays] email failed', { error: error instanceof Error ? error.message : error }));
+      const name = greetingName(student.fullName, birthday.preferredName);
+
+      if (this.emailEnabled() && (await this.store.claimCelebration(student.id, today.year, 'email'))) {
+        try {
+          await this.sendEmail(name, student.email);
+          logger.info(`[birthdays] birthday email sent to ${student.id}`);
+        } catch (error) {
+          // Free the slot so the next check (in a few minutes) tries again.
+          await this.store.releaseCelebration(student.id, today.year, 'email');
+          logger.warn('[birthdays] email failed, will retry', { error: error instanceof Error ? error.message : error });
         }
       }
-      if (today.hour >= CLASSMATES_HOUR && birthday.shareWithClass && (await this.store.claimCelebration(student.id, today.year, 'classmates'))) {
-        if (!this.pushEnabled()) continue;
-        const name = displayName(student.fullName, birthday.preferredName);
+
+      if (today.hour >= SELF_PUSH_HOUR && this.pushEnabled() && (await this.store.claimCelebration(student.id, today.year, 'self-push'))) {
+        await this.store.enqueuePush(await this.store.studentSubscriptions(student.id), {
+          title: `Happy birthday, ${name}! 🎂`,
+          body: 'The whole class is celebrating you today. Open NEXIUM for your flowers 💐',
+          url: '/student',
+          tag: `birthday-self-${student.id}-${today.year}`,
+        });
+        this.deliverNow();
+      }
+
+      if (today.hour >= CLASSMATES_HOUR && birthday.shareWithClass && this.pushEnabled() && (await this.store.claimCelebration(student.id, today.year, 'classmates'))) {
+        const shown = displayName(student.fullName, birthday.preferredName);
         const queued = await this.store.enqueuePush(await this.store.classmateSubscriptions([student.id]), {
-          title: `🎉 It's ${name}'s birthday today!`,
-          body: `Wish ${name} a happy birthday 🎂`,
+          title: `🎉 It's ${shown}'s birthday today!`,
+          body: `Wish ${shown} a happy birthday 🎂`,
           url: '/student',
           tag: `birthday-${student.id}-${today.year}`,
         });

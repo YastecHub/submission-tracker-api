@@ -1,7 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { rateLimit } from 'express-rate-limit';
-import { exportBirthdays, getBirthdayOverview, getMyBirthday, saveMyBirthday } from '../controllers/birthdayController';
+import { exportBirthdays, getBirthdayOverview, getMyBirthday, getStaffBirthday, saveMyBirthday } from '../controllers/birthdayController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/requireRole';
 import { studentAuthMiddleware } from '../middleware/studentAuthMiddleware';
@@ -47,6 +47,12 @@ const saveLimiter = rateLimit({
  *     summary: Save the birthday form (multipart; month, day, preferredName, shareWithClass, optional photo)
  *     security:
  *       - studentBearerAuth: []
+ * /api/birthdays/staff-me:
+ *   get:
+ *     tags: [Birthdays]
+ *     summary: Whether it is the signed-in staff member's birthday (matched to their student account by email)
+ *     security:
+ *       - bearerAuth: []
  * /api/birthdays/admin:
  *   get:
  *     tags: [Birthdays]
@@ -64,5 +70,7 @@ export const birthdayRoutes = Router();
 
 birthdayRoutes.get('/me', studentAuthMiddleware, getMyBirthday);
 birthdayRoutes.put('/me', studentAuthMiddleware, saveLimiter, handlePhoto, saveMyBirthday);
+// Any staff account (class reps, committee): flowers on their own birthday.
+birthdayRoutes.get('/staff-me', authMiddleware, getStaffBirthday);
 birthdayRoutes.get('/admin', authMiddleware, requireRole(...CLASS_ROLES), getBirthdayOverview);
 birthdayRoutes.get('/admin/export', authMiddleware, requireRole(...CLASS_ROLES), exportBirthdays);

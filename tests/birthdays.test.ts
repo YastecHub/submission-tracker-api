@@ -80,6 +80,7 @@ function fakeStore() {
       claims.add(key);
       return true;
     },
+    releaseCelebration: async (studentId: string, year: number, kind: string) => { claims.delete(`${studentId}:${year}:${kind}`); },
     classmateSubscriptions: async (exclude: string[]) => Object.entries(subs).filter(([id]) => !exclude.includes(id)).flatMap(([, ids]) => ids),
     studentSubscriptions: async (studentId: string) => subs[studentId] ?? [],
     enqueuePush: async (ids: string[], message: { title: string }) => { if (ids.length) pushed.push({ ids, title: message.title }); return ids.length; },
@@ -115,7 +116,7 @@ test('students save the form; a photo is optional; classmates celebrating today 
 
 // ---- Celebrations ------------------------------------------------------------
 
-test('celebrations: nothing before 7 am; 7 am email + own notification; 8 am classmates only if shared; once a year', async () => {
+test('celebrations: email from midnight; 7 am own notification; 8 am classmates only if shared; once a year', async () => {
   const { store, birthdays, pushed } = fakeStore();
   birthdays.push(
     { studentId: 's1', month: 3, day: 14, preferredName: null, shareWithClass: true },
@@ -126,10 +127,12 @@ test('celebrations: nothing before 7 am; 7 am email + own notification; 8 am cla
     sendEmail: async (name, email) => { emails.push(`${name}<${email}>`); },
     emailEnabled: () => true, pushEnabled: () => true, deliverNow: () => {},
   });
-  await celebrator.runDue(new Date('2026-03-14T05:30:00Z')); // 06:30 Lagos
+  await celebrator.runDue(new Date('2026-03-13T22:30:00Z')); // 23:30 Lagos the day before
   assert.equal(emails.length + pushed.length, 0);
+  await celebrator.runDue(new Date('2026-03-13T23:10:00Z')); // 00:10 Lagos on the day
+  assert.deepEqual(emails, ['Yasir<yasir@x.test>', 'Jo<joanne@x.test>'], 'emails wait in the inbox from midnight');
+  assert.equal(pushed.length, 0, 'no phone buzzing at night');
   await celebrator.runDue(new Date('2026-03-14T06:05:00Z')); // 07:05 Lagos
-  assert.deepEqual(emails, ['Yasir<yasir@x.test>', 'Jo<joanne@x.test>']);
   assert.deepEqual(pushed, [{ ids: ['p1'], title: 'Happy birthday, Yasir! 🎂' }]);
   await celebrator.runDue(new Date('2026-03-14T07:10:00Z')); // 08:10 Lagos
   assert.deepEqual(pushed.at(-1), { ids: ['p2a', 'p2b'], title: "🎉 It's Yasir Oyebo's birthday today!" });
@@ -137,6 +140,36 @@ test('celebrations: nothing before 7 am; 7 am email + own notification; 8 am cla
   await celebrator.runDue(new Date('2026-03-14T10:00:00Z'));
   assert.equal(emails.length, 2, 'never twice');
   assert.equal(pushed.length, 2, 'never twice');
+});
+
+test('a failed birthday email is retried on the next check', async () => {
+  const { store, birthdays } = fakeStore();
+  birthdays.push({ studentId: 's1', month: 3, day: 14, preferredName: null, shareWithClass: true });
+  let attempts = 0;
+  const celebrator = new BirthdayCelebrator(store as any, {
+    sendEmail: async () => { attempts += 1; if (attempts === 1) throw new Error('Resend is down'); },
+    emailEnabled: () => true, pushEnabled: () => false, deliverNow: () => {},
+  });
+  await celebrator.runDue(new Date('2026-03-14T00:00:00Z'));
+  await celebrator.runDue(new Date('2026-03-14T00:05:00Z'));
+  await celebrator.runDue(new Date('2026-03-14T00:10:00Z'));
+  assert.equal(attempts, 2, 'failed once, sent on the retry, then never again');
+});
+
+test('class reps get flowers on the staff dashboard too (matched to their student account by email)', async () => {
+  const { store, birthdays } = fakeStore();
+  birthdays.push({ studentId: 's1', month: 10, day: 29, preferredName: null, shareWithClass: true });
+  const service = new StudentBirthdayService({
+    ...store,
+    findStudentByEmail: async (email: string) => {
+      const student = students.find((s) => s.email.toLowerCase() === email.toLowerCase());
+      return student ? { id: student.id, fullName: student.fullName, birthday: birthdays.find((b) => b.studentId === student.id) ?? null } : null;
+    },
+  } as any);
+  const onTheDay = new Date('2026-10-29T08:00:00Z');
+  assert.deepEqual(await service.forStaff({ email: 'YASIR@x.test', name: 'Yasir (CR)' }, onTheDay), { isMyBirthday: true, greetingName: 'Yasir' });
+  assert.equal((await service.forStaff({ email: 'yasir@x.test', name: 'Yasir' }, new Date('2026-10-30T08:00:00Z'))).isMyBirthday, false);
+  assert.deepEqual(await service.forStaff({ email: 'other@x.test', name: 'Other Rep' }, onTheDay), { isMyBirthday: false, greetingName: 'Other' });
 });
 
 // ---- Staff ---------------------------------------------------------------------
