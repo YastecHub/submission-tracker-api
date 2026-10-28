@@ -57,6 +57,39 @@ model StudentAccount {
   suspendedAt       DateTime?
   suspendedReason   String?
   electionVotes     ElectionVoteRecord[]
+  birthday          StudentBirthday?
+  birthdayCelebrations BirthdayCelebration[]
+}
+
+/// A student's birthday: day and month only (never the year), filled in from the app.
+model StudentBirthday {
+  id             String         @id @default(uuid())
+  studentId      String         @unique
+  student        StudentAccount @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  month          Int
+  day            Int
+  /// Name for wishes and the media team's flyer, e.g. "Emmy".
+  preferredName  String?
+  /// Classmates are told on the day only when this is on.
+  shareWithClass Boolean        @default(true)
+  photoUrl       String?
+  photoPublicId  String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([month, day])
+}
+
+/// A birthday celebration that was sent ("email", "classmates"), so each goes out once a year.
+model BirthdayCelebration {
+  id        String         @id @default(uuid())
+  studentId String
+  student   StudentAccount @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  year      Int
+  kind      String
+  createdAt DateTime       @default(now())
+
+  @@unique([studentId, year, kind])
 }
 
 model StudentRoster {

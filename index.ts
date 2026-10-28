@@ -23,6 +23,8 @@ import { startNotificationDeliveryWorker } from './src/modules/announcements/app
 import { syncCourseCatalog } from './src/modules/gpa/infrastructure/catalogSync';
 import { electionAdminRoutes, studentElectionRoutes } from './src/routes/elections';
 import { startElectionScheduler } from './src/modules/elections/application/electionScheduler';
+import { birthdayRoutes } from './src/routes/birthdays';
+import { startBirthdayScheduler } from './src/modules/birthdays/application/birthdayCelebrator';
 import { syncClassList } from './src/modules/elections/infrastructure/classList';
 import { startSocketServer } from './src/realtime/socketServer';
 import jwt from 'jsonwebtoken';
@@ -169,6 +171,7 @@ app.use('/api/payment-events', paymentEventRoutes);
 app.use('/api/payment-receipts', paymentReceiptRoutes);
 app.use('/api/bulletin', announcementRoutes);
 app.use('/api/gpa', gpaRoutes);
+app.use('/api/birthdays', birthdayRoutes);
 app.use('/api/elections', studentElectionRoutes);
 app.use('/api/election-admin', electionAdminRoutes);
 app.use('/api', transactionRoutes);
@@ -227,9 +230,10 @@ const HOST = process.env.HOST ?? '0.0.0.0';
 const server = app.listen(PORT, HOST);
 let stopNotificationWorker = () => { };
 let stopElectionScheduler = () => { };
+let stopBirthdayScheduler = () => { };
 // Live updates (elections) share the API's port.
 const sockets = startSocketServer(server, isAllowedOrigin);
-server.on('close', () => { stopNotificationWorker(); stopElectionScheduler(); });
+server.on('close', () => { stopNotificationWorker(); stopElectionScheduler(); stopBirthdayScheduler(); });
 
 server.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EADDRINUSE') {
@@ -244,6 +248,7 @@ const shutdown = (signal: string) => {
   logger.info(`Received ${signal}. Shutting down API server gracefully...`);
   stopNotificationWorker();
   stopElectionScheduler();
+  stopBirthdayScheduler();
   sockets.disconnectSockets(true);
   server.close(() => {
     logger.info('API server closed cleanly.');
@@ -273,6 +278,7 @@ server.on('listening', async () => {
     logger.info(`NEXIUM API server listening on ${base} [DB Connected]`);
     stopNotificationWorker = startNotificationDeliveryWorker();
     stopElectionScheduler = startElectionScheduler();
+    stopBirthdayScheduler = startBirthdayScheduler();
     // The GPA course list lives in prisma/data/course-catalog.csv; keep the database in step with it.
     syncCourseCatalog(prisma)
       .then((result) => {

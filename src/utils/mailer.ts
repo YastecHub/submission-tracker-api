@@ -174,6 +174,27 @@ export async function sendElectionOpenEmail(
   if (result.error) throw new Error(result.error.message);
 }
 
+/** Sent at 7 am (Lagos) on a student's birthday. */
+export async function sendBirthdayEmail(name: string, email: string): Promise<void> {
+  if (!process.env.RESEND_API_KEY) throw new Error('Email delivery is not configured');
+  const client = getResendClient();
+  const result = await client.emails.send({
+    from: getMailFrom(),
+    to: email,
+    subject: `Happy birthday, ${name}! 🎂`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#111827;text-align:center">
+      <p style="font-size:48px;margin:16px 0">💐🎂🎉</p>
+      <h2 style="margin:0 0 12px">Happy birthday, ${escapeEmailHtml(name)}!</h2>
+      <p>Everyone at Class Nexium is celebrating you today. We hope your year is full of good results, good health and good people.</p>
+      <p style="margin:28px 0">
+        <a href="${appUrl()}/student" style="background:#6b21a8;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:600;display:inline-block">Open NEXIUM for your flowers 💐</a>
+      </p>
+      <p style="color:#6b7280;font-size:13px">With love, Class Nexium '31</p>
+    </div>`,
+  });
+  if (result.error) throw new Error(result.error.message);
+}
+
 function escapeEmailHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
 }
