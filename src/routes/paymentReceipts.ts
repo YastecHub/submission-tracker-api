@@ -4,6 +4,7 @@ import {
   submitPaymentReceipt,
   getPaymentReceipts,
   confirmPaymentReceipt,
+  confirmSelectedPaymentReceipts,
   rejectPaymentReceipt,
   getPaymentReceiptStatus,
   getMyTickets,
@@ -49,6 +50,7 @@ router.get('/my-tickets', studentAuthMiddleware, getMyTickets);
 router.post('/scan', authMiddleware, classRepRoles, claimPaymentReceipt);
 router.get('/:eventId/export', authMiddleware, classRepRoles, exportPaymentReceiptsToExcel);
 router.get('/:eventId', authMiddleware, classRepRoles, getPaymentReceipts);
+router.post('/confirm-selected', authMiddleware, classRepRoles, confirmSelectedPaymentReceipts);
 router.patch('/:id/confirm', authMiddleware, classRepRoles, confirmPaymentReceipt);
 router.patch('/:id/reject', authMiddleware, classRepRoles, rejectPaymentReceipt);
 

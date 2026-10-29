@@ -17,6 +17,10 @@ export const exportPaymentReceiptsToExcel = file(async (req) => ({
   contentType: excelContentType,
 }));
 
+export const confirmSelectedPaymentReceipts = ok((req) =>
+  paymentReceiptService.confirmSelected(req.body ?? {}, req.user)
+);
+
 export const confirmPaymentReceipt = ok((req) =>
   paymentReceiptService.confirm(routeParam(req.params.id), req.body, req.user)
 );

@@ -51,6 +51,21 @@ export class SubmissionRepository {
     });
   }
 
+  /** The selected submissions that are still pending, with what the notification needs. */
+  findPendingByIds(ids: string[]) {
+    return prisma.submission.findMany({
+      where: { id: { in: ids }, isConfirmed: false },
+      select: { id: true, matricNumber: true, event: { select: { courseCode: true, title: true } } },
+    });
+  }
+
+  confirmMany(ids: string[], confirmerName: string) {
+    return prisma.submission.updateMany({
+      where: { id: { in: ids }, isConfirmed: false },
+      data: { isConfirmed: true, confirmedAt: new Date(), confirmedBy: confirmerName },
+    });
+  }
+
   confirmAll(eventId: string, confirmerName: string) {
     return prisma.submission.updateMany({
       where: { eventId, isConfirmed: false },

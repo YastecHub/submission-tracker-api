@@ -18,6 +18,10 @@ export const scanConfirm = ok((req) =>
   submissionService.scanConfirm(req.body.submissionId, req.user)
 );
 
+export const confirmSelectedSubmissions = ok((req) =>
+  submissionService.confirmSelected(req.body ?? {}, req.user)
+);
+
 export const confirmAllSubmissions = ok((req) =>
   submissionService.confirmAll(routeParam(req.params.eventId), req.user)
 );

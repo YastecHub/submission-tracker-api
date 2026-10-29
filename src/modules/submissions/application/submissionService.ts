@@ -6,6 +6,7 @@ import { AppError, badRequest, forbidden, notFound } from '../../../shared/error
 import { submissionRepository, SubmissionRepository } from '../infrastructure/submissionRepository';
 import { isClassRep } from '../../auth/domain/classRepAccess';
 import { pushNotificationService } from '../../notifications/pushNotificationService';
+import { selectedIds } from '../../../shared/http/selection';
 
 const CONFIRM_ALL_MIN_SUBMISSIONS = 90;
 const MAX_EXPORT_ROWS = 10_000;
@@ -102,6 +103,23 @@ export class SubmissionService {
     }).catch(() => undefined);
 
     return { alreadyConfirmed: false, submission: confirmed };
+  }
+
+  /** Confirms the selected submissions that are still pending; each student is notified. */
+  async confirmSelected(input: { ids?: unknown }, user: Express.Request['user']) {
+    if (!isClassRep(user?.role)) throw forbidden('You are not allowed to confirm submissions');
+    const ids = selectedIds(input?.ids);
+    const pending = await this.repository.findPendingByIds(ids);
+    const result = pending.length ? await this.repository.confirmMany(pending.map((submission) => submission.id), user!.name) : { count: 0 };
+    for (const submission of pending) {
+      void pushNotificationService.notifyStudentByMatric(submission.matricNumber, {
+        title: 'Submission Verified! ✅',
+        body: `Your submission for "${submission.event.courseCode}: ${submission.event.title}" has been confirmed.`,
+        url: '/student',
+        tag: `sub-confirmed-${submission.id}`,
+      }).catch(() => undefined);
+    }
+    return { confirmed: result.count, skipped: ids.length - result.count };
   }
 
   async confirmAll(eventId: string, user: Express.Request['user']) {

@@ -9,6 +9,7 @@ import { paymentReceiptRepository, PaymentReceiptRepository } from '../infrastru
 import { cacheDeletePrefix } from '../../../utils/cache';
 import { isClassRep } from '../../auth/domain/classRepAccess';
 import { pushNotificationService } from '../../notifications/pushNotificationService';
+import { selectedIds } from '../../../shared/http/selection';
 
 const MAX_EXPORT_ROWS = 10_000;
 
@@ -117,6 +118,31 @@ export class PaymentReceiptService {
     }).catch(() => undefined);
 
     return updated;
+  }
+
+  /**
+   * Confirms several receipts at once, each exactly as if confirmed one by one (ledger entry,
+   * ticket, notification to the student). Only pending receipts are confirmed; anything else
+   * in the selection is skipped and counted.
+   */
+  async confirmSelected(input: { ids?: unknown }, user: Express.Request['user']) {
+    if (!isClassRep(user?.role)) throw forbidden('You are not allowed to confirm receipts');
+    const ids = selectedIds(input?.ids);
+    let confirmed = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const id of ids) {
+      const receipt = await this.repository.findWithEventAndTransaction(id);
+      if (!receipt || receipt.status !== 'pending') { skipped += 1; continue; }
+      try {
+        await this.confirm(id, {}, user);
+        confirmed += 1;
+      } catch (error) {
+        failed += 1;
+        logger.warn('[receipts] bulk confirm failed for one receipt', { receiptId: id, error: error instanceof Error ? error.message : error });
+      }
+    }
+    return { confirmed, skipped, failed };
   }
 
   async reject(id: string, input: { note?: string }, user: Express.Request['user']) {

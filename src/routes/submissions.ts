@@ -4,6 +4,7 @@ import {
   getSubmissions,
   confirmSubmission,
   confirmAllSubmissions,
+  confirmSelectedSubmissions,
   scanConfirm,
   exportToExcel,
   getSubmissionStatus,
@@ -190,6 +191,7 @@ router.get('/status/:id', getSubmissionStatus);
  */
 router.get('/:eventId/export', authMiddleware, classRepRoles, exportToExcel);
 router.patch('/:eventId/confirm-all', authMiddleware, classRepRoles, confirmAllSubmissions);
+router.post('/confirm-selected', authMiddleware, classRepRoles, confirmSelectedSubmissions);
 
 /**
  * @openapi
