@@ -7,6 +7,7 @@ import {
 import { StudentBirthdayService } from '../src/modules/birthdays/application/studentBirthdayService';
 import { BirthdayStaffService } from '../src/modules/birthdays/application/birthdayStaffService';
 import { BirthdayCelebrator } from '../src/modules/birthdays/application/birthdayCelebrator';
+import { birthdayEmailHtml, birthdayEmailSubject, cardPhotoUrl } from '../src/modules/birthdays/domain/birthdayEmail';
 
 // ---- Rules ------------------------------------------------------------------
 
@@ -195,4 +196,37 @@ test('staff overview and Excel export for the media team', async () => {
   assert.equal(rows[0].Photo, 'No photo: ask on the day');
   assert.equal(rows[1].Birthday, '30 October');
   assert.equal(rows[1]['Tell classmates'], 'Yes');
+});
+
+// ---- The birthday card email -----------------------------------------------------
+
+
+test('birthday card: name, photo (cropped to the face), flowers link, from the whole class', () => {
+  const html = birthdayEmailHtml({ name: 'Yasir', photoUrl: 'https://res.cloudinary.com/demo/image/upload/v1/nexium-birthdays/abc.jpg', appUrl: 'https://www.nexium31.app' });
+  assert.match(html, /Happy birthday, Yasir! 🎂/);
+  assert.match(html, /res\.cloudinary\.com\/demo\/image\/upload\/c_fill,g_face,w_320,h_320,q_auto,f_jpg\/v1\/nexium-birthdays\/abc\.jpg/);
+  assert.match(html, /href="https:\/\/www\.nexium31\.app\/student"/);
+  assert.match(html, /From all of Pharm\.D 200L/);
+  assert.equal(birthdayEmailSubject('Yasir'), 'Happy birthday, Yasir! 🎂💐');
+});
+
+test('birthday card without a photo shows a cake; names and links are made safe', () => {
+  const html = birthdayEmailHtml({ name: '<script>Yas</script>', photoUrl: null, appUrl: 'https://www.nexium31.app' });
+  assert.ok(!html.includes('<script>'));
+  assert.match(html, /&lt;script&gt;Yas/);
+  assert.ok(!html.includes('<img src="http'.replace('http', 'javascript')));
+  assert.equal(cardPhotoUrl('javascript:alert(1)'), null);
+  assert.equal(cardPhotoUrl('https://example.com/me.jpg'), 'https://example.com/me.jpg');
+});
+
+test('the celebrator sends the photo with the birthday email', async () => {
+  const { store, birthdays } = fakeStore();
+  birthdays.push({ studentId: 's1', month: 3, day: 14, preferredName: null, shareWithClass: true, photoUrl: 'https://img.test/me.jpg' });
+  const sent: Array<string | null> = [];
+  const celebrator = new BirthdayCelebrator(store as any, {
+    sendEmail: async (_name, _email, photoUrl) => { sent.push(photoUrl ?? null); },
+    emailEnabled: () => true, pushEnabled: () => false, deliverNow: () => {},
+  });
+  await celebrator.runDue(new Date('2026-03-14T00:30:00Z'));
+  assert.deepEqual(sent, ['https://img.test/me.jpg']);
 });

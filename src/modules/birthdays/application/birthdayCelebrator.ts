@@ -44,7 +44,7 @@ export class BirthdayCelebrator {
 
       if (this.emailEnabled() && (await this.store.claimCelebration(student.id, today.year, 'email'))) {
         try {
-          await this.sendEmail(name, student.email);
+          await this.sendEmail(name, student.email, birthday.photoUrl);
           logger.info(`[birthdays] birthday email sent to ${student.id}`);
         } catch (error) {
           // Free the slot so the next check (in a few minutes) tries again.
